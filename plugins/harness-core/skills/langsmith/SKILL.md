@@ -11,10 +11,13 @@ stays in harness-core). Needs the `langsmith` extra and `LANGSMITH_API_KEY`.
 
 ```bash
 uv add "harness-core[langsmith] @ git+https://github.com/nabooai/harness-core"
-export LANGSMITH_API_KEY=ls-...
+export LANGSMITH_API_KEY=lsv2_...    # get one at smith.langchain.com → Settings → API Keys
 export LANGSMITH_TRACING=true
 export LANGSMITH_PROJECT=my-project
 ```
+The SDK reads `LANGSMITH_API_KEY` from the env (see the project's `.env.example`). If you can't
+use env vars, pass it in code: `run_suite_traced(..., api_key="lsv2_...")` or
+`enable_langsmith(api_key="lsv2_...")` (sets it process-wide for tracing + the verdict push).
 
 ## Run an eval suite, fully traced (one call)
 

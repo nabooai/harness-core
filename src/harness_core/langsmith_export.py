@@ -58,12 +58,16 @@ def _ls_client() -> LangSmithClient:
 
 
 _REGISTERED = False
+# the env var the LangSmith SDK reads for credentials (documented in .env.example +
+# docs/TRACING.md); kept as a constant so the literal lives on one line with the gate pragma.
+_API_KEY_ENV = "LANGSMITH_API_KEY"  # overfit-ok: a public env-var name, not a secret value
 
 
 def enable_langsmith(
     *,
     experiment_id: str | None = None,
     project: str | None = None,
+    api_key: str | None = None,
     tags: list[str] | None = None,
     metadata: dict[str, object] | None = None,
 ) -> str:
@@ -71,11 +75,17 @@ def enable_langsmith(
 
     Every exported trace carries `metadata.experiment_id=<id>` and a `experiment:<id>` tag.
     Call ONCE per process (idempotent — repeated calls return the first id without
-    re-registering). `project` overrides $LANGSMITH_PROJECT. The LangSmith API key is read
-    from the environment by the SDK."""
+    re-registering). `project` overrides $LANGSMITH_PROJECT.
+
+    CREDENTIALS: the LangSmith API key is read by the SDK from the environment (the API-key env
+    var named in .env.example / docs/TRACING.md). Set it before running, or pass `api_key=` here;
+    passing it sets that env var process-wide so the trace exporter AND the verdict/economics
+    push both use it."""
     global _REGISTERED, _EXPERIMENT_ID
     if _REGISTERED:
         return _EXPERIMENT_ID
+    if api_key:
+        os.environ.setdefault(_API_KEY_ENV, api_key)  # the SDK reads this
     eid = experiment_id or new_experiment_id()
     try:
         from agents import add_trace_processor
@@ -152,6 +162,7 @@ def run_suite_traced(
     session_root: str,
     experiment_id: str | None = None,
     project: str | None = None,
+    api_key: str | None = None,
     model: ModelArg = None,
     model_name: str = "",
     vault_names: tuple[str, ...] = (),
@@ -162,8 +173,8 @@ def run_suite_traced(
     """Run a scenario suite WITH LangSmith fully wired: enable tagging (experiment_id), run
     every scenario, then auto-push each run's verdict + economics to its trace. One call →
     pass/fail + cost/cached/tokens/time visible per run in LangSmith, grouped by experiment_id.
-    Needs the `langsmith` extra."""
-    eid = enable_langsmith(experiment_id=experiment_id, project=project)
+    Needs the `langsmith` extra + the LangSmith API key (env or `api_key=`)."""
+    eid = enable_langsmith(experiment_id=experiment_id, project=project, api_key=api_key)
     res = run_suite(
         scenarios,
         target,

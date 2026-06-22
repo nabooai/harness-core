@@ -14,6 +14,23 @@ from harness_core.types import Excerpt, TrialOutcome, Verdict
 from harness_core.world import NullWorld
 
 
+# ── credentials: enable_langsmith(api_key=...) sets the env var ──────────────────
+def test_enable_langsmith_api_key_sets_env(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    import harness_core.langsmith_export as LE
+
+    monkeypatch.delenv("LANGSMITH_API_KEY", raising=False)
+    monkeypatch.setattr(LE, "_REGISTERED", False)
+    # langsmith isn't installed in the dev env → the processor import raises AFTER the key is
+    # set, so the env-var side effect is what we assert (the raise is expected/ignored).
+    try:
+        LE.enable_langsmith(api_key="lsv2_test_key")
+    except RuntimeError:
+        pass
+    import os
+
+    assert os.environ.get("LANGSMITH_API_KEY") == "lsv2_test_key"
+
+
 # ── judge calibration ──────────────────────────────────────────────────────────
 def test_run_calibration_scores_accuracy_and_agreement() -> None:
     # a judge that PASSES iff the brief contains "good"

@@ -1,7 +1,7 @@
 {
   "name": "harness-core",
   "description": "Set up and run harness-core: scaffold a HarnessTarget, run judged scenario suites, gate regressions in CI, compare/audit experiments, and wire LangSmith tracing.",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "author": { "name": "Naboo" },
   "homepage": "https://github.com/nabooai/harness-core",
   "keywords": ["llm", "agent", "evaluation", "harness", "judge", "langsmith"]

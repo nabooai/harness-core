@@ -4,6 +4,14 @@ All notable changes to harness-core. Follows [Keep a Changelog](https://keepacha
 and [Semantic Versioning](https://semver.org/). The public API is what's re-exported from
 `harness_core` (see `__all__`); deeper imports are internal and may change without a bump.
 
+## [0.2.1] - 2026-06-22
+
+### Added
+- **Credentials are documented + settable** — `.env.example` (LangSmith + model keys + run
+  roots); README "set the API key first" callout; `enable_langsmith(api_key=…)` /
+  `run_suite_traced(…, api_key=…)` set `LANGSMITH_API_KEY` process-wide (tracing + the verdict/
+  economics push both use it), so you're not limited to the env var.
+
 ## [0.2.0] - 2026-06-22
 
 ### Added

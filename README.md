@@ -84,6 +84,14 @@ We use **LangSmith** for observability (we evaluated a bespoke OTEL collector an
 LangSmith — it ingests OTLP + has native litellm / openai-agents integrations + custom-tool
 tracing). The harness eval *methodology* stays here; LangSmith is the trace UI.
 
+**Set the API key first** (see [`.env.example`](.env.example)) — the SDK reads it from
+`LANGSMITH_API_KEY`:
+```bash
+export LANGSMITH_API_KEY=lsv2_...        # smith.langchain.com → Settings → API Keys
+export LANGSMITH_PROJECT=my-project      # optional; groups runs
+```
+…or pass it in code: `run_suite_traced(…, api_key="lsv2_…")` / `enable_langsmith(api_key="lsv2_…")`.
+
 One call runs the suite **and** wires LangSmith end-to-end:
 
 ```python
