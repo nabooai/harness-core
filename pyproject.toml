@@ -1,0 +1,88 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "harness-core"
+version = "0.1.0"
+description = "Agent-agnostic agent-eval harness: agent-with-tools → run → LLM judge → control-arm comparison. Extracted from the graf monorepo."
+readme = "README.md"
+# PEP 758 (unparenthesized `except` tuples, sweep.py) and `type` statement aliases
+# (types.py) require 3.14 / 3.12+ respectively. The whole package is pinned to 3.14.
+requires-python = ">=3.14"
+license = { text = "Proprietary" }
+authors = [{ name = "Naboo" }]
+keywords = ["llm", "agent", "evaluation", "harness", "judge", "openai-agents"]
+
+# CORE deps only. The iron rule (test_iron_rule.py) keeps the library free of any target
+# package and of graf/fucker, so the runtime surface is just the agents SDK + litellm.
+# `openinference-instrumentation-openai-agents` is NOT required here: harness_core.tracing
+# uses the agents SDK's own `add_trace_processor`; OpenInference is an OPTIONAL extra
+# processor a host app may install on top.
+dependencies = [
+    "openai-agents[litellm]>=0.17.6",
+    "litellm>=1.89.2",
+]
+
+[project.optional-dependencies]
+# The HTTP server (harness_core.server): a graf-free read-API + dashboard over run dirs.
+server = [
+    "fastapi>=0.136.0",
+    "uvicorn>=0.45.0",
+]
+# Optional tracing processor a host can install (the same one the graf webapp uses).
+tracing = [
+    "openinference-instrumentation-openai-agents>=1.5.1",
+]
+
+# Dev tooling lives in a uv dependency-group (installed by default on `uv sync`, but NEVER
+# shipped in the wheel). It includes the `server` deps + httpx so the WHOLE test suite runs
+# without a separate `--extra server`.
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=1.3.0",
+    "ruff>=0.6.0",
+    "fastapi>=0.136.0",
+    "uvicorn>=0.45.0",
+    "httpx>=0.28.0",
+]
+
+[project.scripts]
+# `harness-core ...` -> the package __main__ (server | analyze | list).
+harness-core = "harness_core.__main__:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/harness_core"]
+
+[tool.hatch.build.targets.wheel.force-include]
+# Ship the package docs inside the wheel so `ADDING_A_TARGET.md` travels with the lib.
+"ADDING_A_TARGET.md" = "harness_core/ADDING_A_TARGET.md"
+
+[tool.pytest.ini_options]
+testpaths = ["src/harness_core"]
+python_files = ["test_*.py"]
+# The steer tests use @pytest.mark.asyncio; strict mode (pytest-asyncio default) requires
+# the explicit marker, which they carry.
+asyncio_mode = "strict"
+
+[tool.ruff]
+src = ["src"]
+# 100 cols — matches the source repo so `ruff format` leaves the extracted files untouched.
+line-length = 100
+
+[tool.ruff.lint]
+# Same gate as the source repo: E/F/I/UP + the ANN annotation gate.
+select = ["E", "F", "I", "UP", "ANN"]
+
+[tool.ruff.lint.flake8-annotations]
+# Honor the bridge-kwargs rule: don't force annotating *args/**kwargs.
+allow-star-arg-any = true
+
+[tool.ruff.lint.per-file-ignores]
+# Tests are exempt from ANN by policy (signatures there are test-local, not API surface).
+"src/harness_core/test_*.py" = ["ANN"]
+# TYPING DEBT carried verbatim from the source repo (extracted from fdav13/* originals).
+# Remove each line once that file's defs are annotated.
+"src/harness_core/judge.py" = ["ANN"]
+"src/harness_core/loop.py" = ["ANN"]

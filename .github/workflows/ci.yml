@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.14"
+
+      - name: Sync (locked)
+        run: uv sync --frozen
+
+      - name: Lint
+        run: uv run ruff check src/harness_core
+
+      - name: Test
+        run: uv run pytest -q
+
+      - name: Build wheel
+        run: uv build --wheel
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: docker build -t harness-core:ci .

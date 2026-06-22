@@ -1,0 +1,410 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>harness-core</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #fff; --fg: #0b0f1a; --muted: #f4f5f7; --muted-fg: #6b7280;
+    --border: #e5e7eb; --card: #fff; --accent: #6d28d9;
+    --pass: #047857; --fail: #dc2626; --pend: #d97706;
+    --gen: #8b5cf6; --tool: #3b82f6; --custom: #f59e0b; --slate: #94a3b8;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0b0f17; --fg: #e6e8ec; --muted: #161b26; --muted-fg: #8b93a1;
+      --border: #232a36; --card: #11161f;
+      --pass: #34d399; --fail: #f87171; --pend: #fbbf24;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg);
+    font: 13px/1.55 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+  code, pre, .mono, .tnum { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .tnum { font-variant-numeric: tabular-nums; }
+  a { color: inherit; }
+  header.top { display: flex; align-items: center; gap: 12px; padding: 14px 24px;
+    border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--bg); z-index: 5; }
+  header.top h1 { font-size: 16px; margin: 0; display: flex; align-items: center; gap: 8px; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); }
+  header.top .sub { color: var(--muted-fg); font-size: 12px; }
+  header.top .spacer { flex: 1; }
+  .wrap { max-width: 1280px; margin: 0 auto; padding: 22px 24px; }
+  button, select, input { font: inherit; color: var(--fg); background: var(--card);
+    border: 1px solid var(--border); border-radius: 7px; padding: 5px 10px; cursor: pointer; }
+  button:hover, select:hover { border-color: var(--accent); }
+  input { cursor: text; }
+  .controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+  .controls label { color: var(--muted-fg); font-size: 12px; display: inline-flex; gap: 6px; align-items: center; }
+  .scoreboard { margin-left: auto; display: flex; gap: 16px; color: var(--muted-fg); font-size: 12px; align-items: center; }
+  .scoreboard b { color: var(--fg); }
+  table { width: 100%; border-collapse: collapse; border: 1px solid var(--border);
+    border-radius: 10px; overflow: hidden; }
+  thead th { text-align: left; font-weight: 500; color: var(--muted-fg); background: var(--muted);
+    padding: 8px 12px; font-size: 12px; cursor: pointer; user-select: none; white-space: nowrap; }
+  thead th.r, td.r { text-align: right; }
+  thead th .ar { opacity: .5; font-size: 10px; }
+  tbody td { padding: 8px 12px; border-top: 1px solid var(--border); white-space: nowrap; }
+  tbody tr.run { cursor: pointer; }
+  tbody tr.run:hover { background: var(--muted); }
+  td.scn { font-weight: 600; } td.dim { color: var(--muted-fg); }
+  .chip { display: inline-flex; align-items: center; gap: 5px; font-weight: 600; font-size: 12px; }
+  .chip.pass { color: var(--pass); } .chip.fail { color: var(--fail); } .chip.pend { color: var(--pend); }
+  .chip::before { content: "●"; font-size: 9px; }
+  .badge { display: inline-block; border: 1px solid var(--border); border-radius: 999px;
+    padding: 0 7px; font-size: 11px; color: var(--muted-fg); }
+  .pill { display: inline-block; border: 1px solid var(--border); border-radius: 999px;
+    padding: 0 7px; font-size: 11px; }
+  .muted { color: var(--muted-fg); }
+  .empty, .loading { text-align: center; color: var(--muted-fg); padding: 60px 0; }
+  .err { border: 1px solid var(--fail); color: var(--fail); background: color-mix(in srgb, var(--fail) 10%, transparent);
+    border-radius: 8px; padding: 8px 12px; margin-bottom: 14px; font-size: 12px; }
+  /* detail */
+  .cards { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; margin: 16px 0; }
+  @media (max-width: 880px) { .cards { grid-template-columns: repeat(3, 1fr); } }
+  .card { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; }
+  .card .k { font-size: 10px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted-fg); }
+  .card .v { font-size: 16px; font-weight: 600; }
+  section.blk { margin: 20px 0; }
+  section.blk h3 { font-size: 13px; margin: 0 0 8px; }
+  .box { border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+  .box.scroll { max-height: 420px; overflow: auto; }
+  .pre { white-space: pre-wrap; word-break: break-word; }
+  .verdict { border: 1px solid var(--border); background: var(--muted); border-radius: 10px;
+    padding: 10px 14px; margin: 12px 0; }
+  /* timeline */
+  .step { display: flex; gap: 12px; padding: 7px 0; border-bottom: 1px solid var(--border); }
+  .step:last-child { border-bottom: 0; }
+  .step .kind { flex: 0 0 132px; font-size: 11px; text-transform: uppercase; letter-spacing: .03em; }
+  .step .body { flex: 1; min-width: 0; }
+  .step .dur { flex: 0 0 60px; text-align: right; color: var(--muted-fg); font-size: 11px; }
+  .k-tool_call { color: var(--tool); } .k-tool_result { color: var(--slate); }
+  .k-reasoning { color: var(--gen); } .k-assistant_message { color: var(--fg); }
+  .step pre { margin: 0; background: var(--muted); border-radius: 6px; padding: 8px;
+    max-height: 360px; overflow: auto; font-size: 12px; }
+  /* trace waterfall */
+  .trace .head { display: flex; gap: 8px; font-size: 10px; text-transform: uppercase; letter-spacing: .04em;
+    color: var(--muted-fg); padding: 0 0 6px; border-bottom: 1px solid var(--border); }
+  .trace .head .nm { width: 230px; } .trace .head .tl { flex: 1; }
+  .trace .head .c { width: 64px; text-align: right; }
+  .spanrow { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left;
+    background: none; border: 0; padding: 4px 0; border-radius: 6px; }
+  .spanrow:hover { background: var(--muted); }
+  .spanrow.open { background: var(--muted); }
+  .spanrow .nm { width: 230px; display: flex; align-items: center; gap: 5px; overflow: hidden; }
+  .spanrow .nm .lbl { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .spanrow .bar-track { flex: 1; height: 8px; position: relative; }
+  .spanrow .bar { position: absolute; height: 8px; border-radius: 3px; }
+  .spanrow .c { width: 64px; text-align: right; color: var(--muted-fg); font-size: 11px; }
+  .t-generation { background: var(--gen); } .t-function { background: var(--tool); }
+  .t-custom { background: var(--custom); } .t-agent, .t-task, .t-default { background: var(--slate); }
+  .spandetail { margin: 2px 0 8px 18px; border-left: 2px solid var(--border); padding: 8px 12px;
+    background: var(--muted); border-radius: 0 8px 8px 0; }
+  .spandetail .meta { display: flex; flex-wrap: wrap; gap: 4px 18px; font-size: 11px; color: var(--muted-fg); }
+  .spandetail .meta b { color: var(--fg); font-weight: 600; }
+  .spandetail pre { margin: 6px 0 0; background: var(--card); border: 1px solid var(--border);
+    border-radius: 6px; padding: 8px; font-size: 11px; max-height: 280px; overflow: auto; white-space: pre-wrap; word-break: break-word; }
+  .caret { transition: transform .12s; display: inline-block; color: var(--muted-fg); }
+  .caret.open { transform: rotate(90deg); }
+</style>
+</head>
+<body>
+<header class="top">
+  <h1><span class="dot"></span> harness-core</h1>
+  <span class="sub" id="subtitle">the optimization scoreboard — pass · turns · tokens · cost · time</span>
+  <span class="spacer"></span>
+  <button id="refresh">↻ Refresh</button>
+</header>
+<div id="app"></div>
+
+<script>
+const $ = (s, r = document) => r.querySelector(s);
+const el = (tag, attrs = {}, ...kids) => {
+  const n = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === "class") n.className = v;
+    else if (k === "html") n.innerHTML = v;
+    else if (k.startsWith("on") && typeof v === "function") n.addEventListener(k.slice(2), v);
+    else if (v != null) n.setAttribute(k, v);
+  }
+  for (const kid of kids.flat()) if (kid != null) n.append(kid.nodeType ? kid : document.createTextNode(String(kid)));
+  return n;
+};
+const esc = s => (s ?? "").replace(/[&<>]/g, m => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[m]));
+const fmtNum = n => !n ? "—" : (n >= 1000 ? (n / 1000).toFixed(1) + "k" : String(n));
+const fmtCost = u => !u ? "—" : (u < 0.01 ? "$" + u.toFixed(4) : "$" + u.toFixed(2));
+const fmtSecs = s => s ? s.toFixed(1) + "s" : "—";
+const fmtMs = ms => ms == null ? "" : (ms >= 1000 ? (ms / 1000).toFixed(2) + "s" : Math.round(ms) + "ms");
+const fmtTs = ts => { if (!ts) return "—"; const d = new Date(ts * 1000);
+  return d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }); };
+
+async function api(path) {
+  const r = await fetch(path);
+  if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
+  return r.json();
+}
+
+function outcomeChip(passed, outcome) {
+  if (passed) return el("span", { class: "chip pass" }, "pass");
+  if (outcome && outcome !== "fail") return el("span", { class: "chip pend" }, outcome);
+  return el("span", { class: "chip fail" }, "fail");
+}
+
+// ─────────────────────────── list view ───────────────────────────
+const state = { harness: "", q: "", limit: 200, sort: "ts", dir: -1, cells: [], harnesses: [] };
+
+const COLS = [
+  { k: "scenario", t: "Scenario", cls: "scn", get: c => c.scenario ?? "—" },
+  { k: "model", t: "Model", cls: "dim", get: c => c.model ?? "—" },
+  { k: "outcome", t: "Outcome", get: c => c.outcome ?? "" },
+  { k: "turns", t: "Turns", r: 1, get: c => c.turns || 0 },
+  { k: "n_tool_calls", t: "Tools", r: 1, get: c => c.n_tool_calls || 0 },
+  { k: "total_tokens", t: "Tokens", r: 1, get: c => c.total_tokens || 0 },
+  { k: "cost_usd", t: "Cost", r: 1, get: c => c.cost_usd || 0 },
+  { k: "wall_clock_s", t: "Time", r: 1, get: c => c.wall_clock_s || 0 },
+  { k: "ts", t: "When", r: 1, get: c => c.ts || 0 },
+];
+
+function sortCells(cells) {
+  const c = COLS.find(c => c.k === state.sort) || COLS[COLS.length - 1];
+  return [...cells].sort((a, b) => {
+    const va = c.get(a), vb = c.get(b);
+    const cmp = typeof va === "number" && typeof vb === "number" ? va - vb : String(va).localeCompare(String(vb));
+    return cmp * state.dir;
+  });
+}
+
+function renderCell(c) {
+  const tds = COLS.map(col => {
+    if (col.k === "outcome") return el("td", {}, outcomeChip(c.passed, c.outcome));
+    if (col.k === "scenario") {
+      const td = el("td", { class: "scn" }, col.get(c));
+      if (c.reasoning) td.append(el("span", { class: "muted", style: "margin-left:8px;font-weight:400" }, c.reasoning));
+      return td;
+    }
+    let v = col.get(c);
+    if (col.k === "total_tokens") v = fmtNum(v);
+    else if (col.k === "cost_usd") v = fmtCost(v);
+    else if (col.k === "wall_clock_s") v = fmtSecs(v);
+    else if (col.k === "ts") v = fmtTs(v);
+    else if (col.r) v = v || "—";
+    return el("td", { class: (col.cls || "") + (col.r ? " r tnum" : "") }, v);
+  });
+  return el("tr", { class: "run", onclick: () => { location.hash = "#/cell/" + encodeURIComponent(c.cell_id); } }, ...tds);
+}
+
+async function loadList() {
+  const app = $("#app");
+  app.replaceChildren(el("div", { class: "loading" }, "Loading…"));
+  let err = null;
+  try {
+    const [cells, harnesses] = await Promise.all([
+      api(`api/runs?limit=${state.limit}` + (state.harness ? `&harness=${encodeURIComponent(state.harness)}` : "")),
+      api("api/harnesses"),
+    ]);
+    state.cells = cells; state.harnesses = harnesses;
+  } catch (e) { err = e.message; }
+  renderList(err);
+}
+
+function renderList(err) {
+  const app = $("#app");
+  let view = state.cells;
+  if (state.q) {
+    const q = state.q.toLowerCase();
+    view = view.filter(c => [c.scenario, c.model, c.agent, c.harness, c.detail]
+      .some(x => (x || "").toLowerCase().includes(q)));
+  }
+  const sorted = sortCells(view);
+  const passes = view.filter(c => c.passed).length;
+  const cost = view.reduce((a, c) => a + (c.cost_usd || 0), 0);
+  const wall = view.reduce((a, c) => a + (c.wall_clock_s || 0), 0);
+
+  const hsel = el("select", { onchange: e => { state.harness = e.target.value; loadList(); } },
+    el("option", { value: "" }, "all harnesses"),
+    ...state.harnesses.map(h => el("option", { value: h, ...(h === state.harness ? { selected: "" } : {}) }, h)));
+  const search = el("input", { type: "search", placeholder: "filter scenario / model / agent…",
+    value: state.q, style: "width:240px", oninput: e => { state.q = e.target.value; renderList(null); } });
+  const limit = el("input", { type: "number", min: "1", value: state.limit, style: "width:5.5em",
+    onchange: e => { state.limit = +e.target.value || 200; loadList(); } });
+
+  const controls = el("div", { class: "controls" },
+    el("label", {}, "Harness", hsel),
+    search,
+    el("label", {}, "limit", limit),
+    el("div", { class: "scoreboard" },
+      view.length ? el("span", {}, el("b", {}, `${passes}/${view.length}`), " pass") : null,
+      view.length ? el("span", {}, "◷ ", fmtSecs(wall)) : null,
+      view.length ? el("span", {}, "⛁ ", fmtCost(cost)) : null));
+
+  const thead = el("thead", {}, el("tr", {}, ...COLS.map(col => {
+    const arrow = state.sort === col.k ? (state.dir < 0 ? " ▾" : " ▴") : "";
+    return el("th", { class: col.r ? "r" : "", onclick: () => {
+      if (state.sort === col.k) state.dir *= -1; else { state.sort = col.k; state.dir = col.r ? -1 : 1; }
+      renderList(null);
+    } }, col.t, el("span", { class: "ar" }, arrow));
+  })));
+  const tbody = el("tbody", {}, ...sorted.map(renderCell));
+
+  const body = err
+    ? el("div", { class: "err" }, err)
+    : state.cells.length === 0
+      ? el("div", { class: "empty" }, "No harness_core runs found. Set $HARNESS_RUNS_ROOTS or run a scenario.")
+      : el("table", {}, thead, tbody);
+
+  app.replaceChildren(el("div", { class: "wrap" }, controls, body));
+  $("#subtitle").textContent = "the optimization scoreboard — pass · turns · tokens · cost · time";
+}
+
+// ─────────────────────────── detail view ───────────────────────────
+function spanTokens(s) {
+  const u = s.usage;
+  if (u && typeof u === "object" && (u.total_tokens ?? u.input_tokens) != null) return u.total_tokens ?? u.input_tokens;
+  return typeof s.aux_tokens === "number" ? s.aux_tokens : undefined;
+}
+function spanTree(spans) {
+  const ids = new Set(spans.map(s => s.span_id));
+  const byParent = new Map();
+  for (const s of spans) {
+    const p = s.parent_id && ids.has(s.parent_id) ? s.parent_id : null;
+    (byParent.get(p) || byParent.set(p, []).get(p)).push(s);
+  }
+  const out = [];
+  const walk = (p, depth) => { for (const s of byParent.get(p) || []) { out.push({ span: s, depth }); if (s.span_id) walk(s.span_id, depth + 1); } };
+  walk(null, 0);
+  return out;
+}
+function tracePanel(spans) {
+  const starts = spans.map(s => s.started_at ? Date.parse(s.started_at) : NaN).filter(n => !Number.isNaN(n));
+  let t0 = 0, totalMs = 1;
+  if (starts.length) {
+    t0 = Math.min(...starts);
+    const ends = spans.map(s => { const st = s.started_at ? Date.parse(s.started_at) : NaN; return Number.isNaN(st) ? t0 : st + (s.dur_ms ?? 0); });
+    totalMs = Math.max(1, Math.max(...ends) - t0);
+  } else totalMs = Math.max(1, ...spans.map(s => s.dur_ms ?? 0));
+
+  const head = el("div", { class: "head" },
+    el("span", { class: "nm" }, "span"), el("span", { class: "tl" }, `timeline (${fmtMs(totalMs)})`),
+    el("span", { class: "c" }, "time"), el("span", { class: "c" }, "tokens"), el("span", { class: "c" }, "spend"));
+  const rows = el("div", {});
+  spanTree(spans).forEach(({ span, depth }, i) => {
+    const dur = span.dur_ms ?? 0;
+    const st = span.started_at ? Date.parse(span.started_at) : NaN;
+    const off = Number.isNaN(st) ? 0 : st - t0;
+    const left = totalMs > 0 ? (off / totalMs) * 100 : 0;
+    const width = totalMs > 0 ? Math.max(1.5, (dur / totalMs) * 100) : 0;
+    const tone = "t-" + (["generation", "function", "custom"].includes(span.span_type) ? span.span_type : "default");
+    const tokens = spanTokens(span), cost = typeof span.aux_cost_usd === "number" ? span.aux_cost_usd : undefined;
+    const caret = el("span", { class: "caret" }, "▸");
+    const row = el("button", { class: "spanrow" },
+      el("span", { class: "nm", style: `padding-left:${depth * 14}px` }, caret,
+        el("span", { class: "pill" }, span.span_type),
+        el("span", { class: "lbl" }, span.name || span.model || span.span_type)),
+      el("span", { class: "bar-track" }, el("span", { class: "bar " + tone, style: `left:${left}%;width:${width}%`, title: `+${fmtMs(off)} · ${fmtMs(dur)}` })),
+      el("span", { class: "c tnum" }, fmtMs(dur)),
+      el("span", { class: "c tnum" }, tokens != null ? fmtNum(tokens) : ""),
+      el("span", { class: "c tnum", style: "color:var(--pass)" }, cost != null ? fmtCost(cost) : ""));
+    const detail = spanDetail(span);
+    detail.style.display = "none";
+    row.addEventListener("click", () => {
+      const open = detail.style.display === "none";
+      detail.style.display = open ? "block" : "none";
+      row.classList.toggle("open", open); caret.classList.toggle("open", open);
+    });
+    rows.append(row, detail);
+  });
+  return el("div", { class: "box trace" }, head, rows);
+}
+function spanDetail(s) {
+  const u = s.usage;
+  const meta = el("div", { class: "meta" },
+    el("span", { html: `type: <b>${esc(s.span_type)}</b>` }),
+    s.name ? el("span", { html: `name: <b>${esc(s.name)}</b>` }) : null,
+    s.model ? el("span", { html: `model: <b>${esc(s.model)}</b>` }) : null,
+    s.dur_ms != null ? el("span", { html: `duration: <b>${fmtMs(s.dur_ms)}</b>` }) : null,
+    u ? el("span", { html: `tokens: <b>in ${u.input_tokens ?? 0} · out ${u.output_tokens ?? 0}${u.cached_tokens ? " · cached " + u.cached_tokens : ""}</b>` }) : null,
+    (typeof s.aux_cost_usd === "number" || typeof s.aux_tokens === "number")
+      ? el("span", { html: `spend: <b style="color:var(--pass)">${typeof s.aux_tokens === "number" ? fmtNum(s.aux_tokens) + " tok" : ""}${typeof s.aux_cost_usd === "number" ? " · " + fmtCost(s.aux_cost_usd) : ""}</b>` }) : null);
+  const wrap = el("div", { class: "spandetail" }, meta);
+  if (s.error) wrap.append(el("pre", { style: "color:var(--fail)" }, s.error));
+  const field = (label, v) => { if (v) wrap.append(el("div", { class: "muted", style: "font-size:10px;text-transform:uppercase;margin-top:6px" }, label), el("pre", {}, v)); };
+  field("input", s.input); field("output", s.output); field("data", s.data);
+  if (!s.input && !s.output && !s.data && !s.error)
+    wrap.append(el("div", { class: "muted", style: "margin-top:6px;font-style:italic" },
+      ["task", "agent", "turn"].includes(s.span_type) ? "Container span — open its child spans for payloads." : "No captured payload."));
+  return wrap;
+}
+
+function stepBody(step) {
+  const k = step.kind;
+  if (k === "tool_call") return el("pre", {}, JSON.stringify({ tool: step.tool ?? "tool", args: step.args ?? {} }, null, 2));
+  if (k === "tool_result") {
+    const t = String(step.output ?? "").trim();
+    if (t.startsWith("{") || t.startsWith("[")) { try { return el("pre", {}, JSON.stringify(JSON.parse(t), null, 2)); } catch (e) {} }
+    return el("div", { class: "pre" }, t.length > 1600 ? t.slice(0, 1600) + " …" : t);
+  }
+  let body = "";
+  if (k === "reasoning" || k === "assistant_message") body = String(step.text ?? "");
+  else { const { seq, kind, ts, dur_s, ...rest } = step; body = Object.keys(rest).length ? JSON.stringify(rest) : ""; }
+  return el("div", { class: "pre" }, body.length > 1200 ? body.slice(0, 1200) + " …" : body);
+}
+function stepRow(step) {
+  return el("div", { class: "step" },
+    el("span", { class: "kind k-" + step.kind }, step.kind),
+    el("div", { class: "body" }, stepBody(step)),
+    el("span", { class: "dur tnum" }, step.dur_s != null ? fmtMs(step.dur_s * 1000) : ""));
+}
+function econCard(k, v) { return el("div", { class: "card" }, el("div", { class: "k" }, k), el("div", { class: "v tnum" }, v)); }
+
+async function loadDetail(cellId) {
+  const app = $("#app");
+  app.replaceChildren(el("div", { class: "loading" }, "Loading…"));
+  let d, err = null;
+  try { d = await api("api/runs/" + encodeURIComponent(cellId)); } catch (e) { err = e.message; }
+  if (err) { app.replaceChildren(el("div", { class: "wrap" }, el("div", { class: "err" }, err), backBtn())); return; }
+  const comp = d.components || {}, econ = d.economics || {};
+  $("#subtitle").textContent = `${comp.model ?? ""}${comp.reasoning ? " · " + comp.reasoning : ""} · ${d.harness ?? ""}`;
+
+  const header = el("div", { style: "display:flex;align-items:center;gap:10px;flex-wrap:wrap" },
+    backBtn(),
+    el("h2", { style: "margin:0;font-size:18px;flex:1" }, comp.scenario ?? "Run"),
+    outcomeChip(d.passed, d.outcome),
+    (d.verdict || {}).judge ? el("span", { class: "badge" }, String(d.verdict.judge)) : null);
+
+  const blocks = [header];
+  const verdictDetail = (d.verdict || {}).detail;
+  if (verdictDetail) blocks.push(el("div", { class: "verdict pre" }, verdictDetail));
+  blocks.push(el("div", { class: "cards" },
+    econCard("Turns", String(econ.llm_requests || d.n_tool_calls || 0)),
+    econCard("Tool calls", String(d.n_tool_calls || 0)),
+    econCard("Tokens", fmtNum(econ.total_tokens)),
+    econCard("Cached", fmtNum(econ.cached_tokens)),
+    econCard("Cost", fmtCost(econ.cost_usd)),
+    econCard("Time", fmtSecs(econ.wall_clock_s))));
+  if (d.brief) blocks.push(el("section", { class: "blk" }, el("h3", {}, "Brief"), el("div", { class: "box pre" }, d.brief)));
+  if (d.answer) blocks.push(el("section", { class: "blk" }, el("h3", {}, "Answer"), el("div", { class: "box pre" }, d.answer)));
+  if (d.spans && d.spans.length)
+    blocks.push(el("section", { class: "blk" }, el("h3", {}, "Trace ", el("span", { class: "muted" }, `(${d.spans.length} spans · click a span for its payload)`)), tracePanel(d.spans)));
+  blocks.push(el("section", { class: "blk" }, el("h3", {}, "Timeline ", el("span", { class: "muted" }, `(${(d.steps || []).length})`)),
+    el("div", { class: "box scroll" }, ...(d.steps || []).map(stepRow))));
+  if (d.system_prompt)
+    blocks.push(el("section", { class: "blk" }, el("h3", {}, "System prompt"), el("div", { class: "box scroll pre" }, d.system_prompt)));
+
+  app.replaceChildren(el("div", { class: "wrap" }, ...blocks));
+}
+function backBtn() { return el("button", { onclick: () => { location.hash = ""; } }, "‹ Back"); }
+
+// ─────────────────────────── router ───────────────────────────
+function route() {
+  const m = location.hash.match(/^#\/cell\/(.+)$/);
+  if (m) loadDetail(decodeURIComponent(m[1]));
+  else loadList();
+}
+$("#refresh").addEventListener("click", route);
+window.addEventListener("hashchange", route);
+route();
+</script>
+</body>
+</html>

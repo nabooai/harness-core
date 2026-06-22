@@ -1,0 +1,19 @@
+# Run artifacts (regenerable; may contain live connector data) — never commit.
+runs/
+*/runs/
+.fda/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.ty_cache/
+
+# OS / editor
+.DS_Store

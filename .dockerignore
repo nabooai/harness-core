@@ -1,0 +1,15 @@
+.venv
+.git
+.github
+**/__pycache__
+*.py[cod]
+.ruff_cache
+.ty_cache
+.pytest_cache
+dist
+build
+*.egg-info
+runs
+**/runs
+.fda
+.DS_Store
