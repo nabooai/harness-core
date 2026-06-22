@@ -11,12 +11,21 @@ Needs the `langsmith` extra (`langsmith[openai-agents]`). The harness core never
 
 from __future__ import annotations
 
+import os
+import time
 from typing import TYPE_CHECKING
 
-from harness_core.experiment_runner import new_experiment_id
+from harness_core.experiment_runner import new_experiment_id, run_suite
 
 if TYPE_CHECKING:
+    from collections.abc import Callable, Sequence
+
+    from harness_core.experiment_runner import SuiteResult
     from harness_core.record import RunRecord
+    from harness_core.runner import JudgeFn
+    from harness_core.scenario import Scenario
+    from harness_core.target import HarnessTarget
+    from harness_core.types import ModelArg
 
 
 def attach_economics(run_id: str, record: RunRecord, *, client: object | None = None) -> None:
@@ -82,3 +91,88 @@ def enable_langsmith(
 
 
 _EXPERIMENT_ID = ""
+
+
+def sync_to_langsmith(
+    result: SuiteResult,
+    *,
+    project: str | None = None,
+    client: object | None = None,
+    wait_s: float = 20.0,
+) -> int:
+    """Push each suite run's VERDICT (feedback `pass` 1.0/0.0) + ECONOMICS to its LangSmith
+    trace, AFTER the suite (so the exporter has flushed). Matches a record to its trace by the
+    `run:<scenario>` name within the experiment's tag, polling up to `wait_s` for late flushes.
+    Returns the number of runs synced. Idempotent-ish: feedback is additive."""
+    cl = client if client is not None else _ls_client()
+    proj = project or os.environ.get("LANGSMITH_PROJECT")
+    expected: dict[str, RunRecord] = {f"run:{r.scenario}": r for r in result.records}
+    found: dict[str, str] = {}
+    deadline = time.monotonic() + wait_s
+    while True:
+        roots = list(
+            cl.list_runs(  # type: ignore[attr-defined]
+                project_name=proj,
+                is_root=True,
+                filter=f'has(tags, "experiment:{result.experiment_id}")',
+                limit=100,  # LangSmith caps list_runs at 100
+            )
+        )
+        for r in roots:
+            name = str(getattr(r, "name", ""))
+            if name in expected and name not in found:
+                found[name] = str(getattr(r, "id", ""))
+        if len(found) >= len(expected) or time.monotonic() >= deadline:
+            break
+        time.sleep(2)
+    from harness_core.langsmith_pull import push_feedback
+
+    for name, run_id in found.items():
+        rec = expected[name]
+        push_feedback(
+            run_id,
+            key="pass",
+            score=1.0 if rec.passed else 0.0,
+            comment=rec.detail[:200],
+            client=cl,
+        )
+        attach_economics(run_id, rec, client=cl)
+    return len(found)
+
+
+def run_suite_traced(
+    scenarios: Sequence[Scenario],
+    target: HarnessTarget,
+    *,
+    judge: JudgeFn,
+    session_root: str,
+    experiment_id: str | None = None,
+    project: str | None = None,
+    model: ModelArg = None,
+    model_name: str = "",
+    vault_names: tuple[str, ...] = (),
+    judge_model: str = "",
+    judge_factory: Callable[[Scenario], JudgeFn] | None = None,
+    sync: bool = True,
+) -> SuiteResult:
+    """Run a scenario suite WITH LangSmith fully wired: enable tagging (experiment_id), run
+    every scenario, then auto-push each run's verdict + economics to its trace. One call →
+    pass/fail + cost/cached/tokens/time visible per run in LangSmith, grouped by experiment_id.
+    Needs the `langsmith` extra."""
+    eid = enable_langsmith(experiment_id=experiment_id, project=project)
+    res = run_suite(
+        scenarios,
+        target,
+        judge=judge,
+        session_root=session_root,
+        experiment_id=eid,
+        model=model,
+        model_name=model_name,
+        vault_names=vault_names,
+        judge_model=judge_model,
+        judge_factory=judge_factory,
+    )
+    if sync:
+        synced = sync_to_langsmith(res, project=project)
+        print(f"[langsmith] synced verdict + economics for {synced}/{res.total} runs → {eid}")
+    return res

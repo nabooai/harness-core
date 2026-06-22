@@ -99,10 +99,37 @@ the section above, so it lands in LangSmith with its `data` payload intact.
 
 ## Run a scenario suite under one experiment_id
 
-To measure/improve you run the WHOLE suite and compare. `run_suite` runs every scenario, groups
-the runs under `session_root/<experiment_id>/` (+ an `experiment.json` ledger), and — with
-`enable_langsmith` on — stamps every trace with `metadata.experiment_id` + a `experiment:<id>`
-tag so the suite is one filterable group in LangSmith:
+### One call, fully wired: `run_suite_traced`
+
+`run_suite_traced` does the whole thing — enable LangSmith tagging, run every scenario under one
+`experiment_id`, then auto-push each run's **verdict** (feedback `pass`) **and economics**
+(cost / cached / reasoning / wall / requests). One call → pass/fail + the full cost scoreboard
+per run in LangSmith, grouped by experiment_id:
+
+```python
+from harness_core.langsmith_export import run_suite_traced
+
+res = run_suite_traced(
+    scenarios, target,                       # list[Scenario] + the HarnessTarget
+    judge=target.judge(judge_model),
+    session_root="explore_schema_agent/runs",
+    project="harness-core",
+    model="gemini/gemini-3-flash-preview",
+    model_name="gemini-3-flash-preview",
+    judge_model="gemini/gemini-3.5-flash",
+)
+# [langsmith] synced verdict + economics for 2/2 runs → exp-20260622T075603-038add
+```
+
+Verified live: every scenario trace ends up with `pass=1.0`, `cost_usd≈0.0014`, `cached_tokens`,
+`wall_clock_s`, etc. — no manual push step. (`run_suite_traced` = `enable_langsmith` +
+`run_suite` + `sync_to_langsmith`; pass `sync=False` to skip the auto-push.)
+
+### The pieces
+
+`run_suite` runs every scenario, groups the runs under `session_root/<experiment_id>/`
+(+ an `experiment.json` ledger), and — with `enable_langsmith` on — stamps every trace with
+`metadata.experiment_id` + a `experiment:<id>` tag so the suite is one filterable group:
 
 ```python
 from harness_core.langsmith_export import enable_langsmith   # langsmith[openai-agents]

@@ -81,6 +81,70 @@ def test_run_suite_groups_under_experiment_id(
     assert "✓ alpha" in res.render() and "✗ beta" in res.render()
 
 
+def test_sync_to_langsmith_pushes_verdict_and_economics(tmp_path: Path) -> None:
+    """sync_to_langsmith matches each record to its run:<scenario> trace and pushes the
+    verdict (feedback `pass`) + the economics metrics — via an injected fake client."""
+    from types import SimpleNamespace
+
+    from harness_core.experiment_runner import SuiteResult
+    from harness_core.langsmith_export import sync_to_langsmith
+
+    recs = [
+        RunRecord(
+            manifest="m",
+            scenario="alpha",
+            floor_enabled=True,
+            outcome=TrialOutcome.PASS,
+            session_path="",
+            detail="good",
+            cost_usd=0.004,
+            total_tokens=120,
+            cached_tokens=10,
+            reasoning_tokens=5,
+            wall_clock_s=2.5,
+            llm_requests=2,
+        ),
+        RunRecord(
+            manifest="m",
+            scenario="beta",
+            floor_enabled=True,
+            outcome=TrialOutcome.FAIL,
+            session_path="",
+            detail="bad",
+            cost_usd=0.001,
+            total_tokens=50,
+        ),
+    ]
+    res = SuiteResult(experiment_id="exp-x", session_root=tmp_path, records=recs, cells={})
+
+    class _C:
+        def __init__(self) -> None:
+            self.fb: list[tuple[str, str, float]] = []
+
+        def list_runs(self, **kw: object) -> list[SimpleNamespace]:
+            return [
+                SimpleNamespace(id="a", name="run:alpha"),
+                SimpleNamespace(id="b", name="run:beta"),
+            ]
+
+        def create_feedback(
+            self, run_id: str, *, key: str = "", score: float = 0.0, **kw: object
+        ) -> None:
+            self.fb.append((run_id, key, score))
+
+    c = _C()
+    n = sync_to_langsmith(res, project="p", client=c, wait_s=0)
+    assert n == 2
+    # verdict feedback: alpha pass=1.0, beta pass=0.0
+    assert ("a", "pass", 1.0) in c.fb
+    assert ("b", "pass", 0.0) in c.fb
+    # economics feedback pushed for alpha (cost + the rest)
+    alpha = {(k, v) for rid, k, v in c.fb if rid == "a"}
+    assert ("cost_usd", 0.004) in alpha
+    assert ("cached_tokens", 10.0) in alpha
+    assert ("wall_clock_s", 2.5) in alpha
+
+
 def test_run_suite_uses_given_experiment_id_and_per_scenario_judge(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
