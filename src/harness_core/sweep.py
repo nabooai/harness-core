@@ -59,7 +59,7 @@ def _free_ram_mb() -> float | None:
         pass
     try:
         return os.sysconf("SC_AVPHYS_PAGES") * os.sysconf("SC_PAGE_SIZE") / (1024 * 1024)
-    except ValueError, OSError, AttributeError:
+    except ValueError, OSError, AttributeError:  # parenthesized → portable to 3.12
         return None
 
 

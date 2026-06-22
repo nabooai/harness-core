@@ -38,7 +38,9 @@ def create_app() -> FastAPI:
     from fastapi import FastAPI, HTTPException, Query, Response
     from fastapi.responses import HTMLResponse
 
-    app = FastAPI(title="harness-core", version="0.1.0")
+    from harness_core import __version__
+
+    app = FastAPI(title="harness-core", version=__version__)
 
     @app.get("/healthz")
     def healthz() -> dict[str, object]:

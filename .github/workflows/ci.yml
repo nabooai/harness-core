@@ -31,6 +31,27 @@ jobs:
       - name: Build wheel
         run: uv build --wheel
 
+  wheel:
+    # prove the ARTIFACT a consumer receives: install the wheel into a clean venv (core + each
+    # extra) and import the public surface. Catches packaging regressions `pytest` can't.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.14"
+      - name: Build wheel
+        run: uv build --wheel
+      - name: Install + import the public API (core)
+        run: |
+          uv venv /tmp/v && uv pip install --python /tmp/v dist/*.whl
+          /tmp/v/bin/python -c "import harness_core as h; print(h.__version__); \
+            from harness_core import run_suite, compare_experiments, ToolAgentTarget, LLMJudge"
+      - name: Install the server + langsmith extras
+        run: |
+          uv pip install --python /tmp/v "$(echo dist/*.whl)[server]"
+          /tmp/v/bin/python -c "import harness_core.server, harness_core.results"
+
   docker:
     runs-on: ubuntu-latest
     steps:

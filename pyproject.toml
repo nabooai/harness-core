@@ -4,11 +4,12 @@ build-backend = "hatchling.build"
 
 [project]
 name = "harness-core"
-version = "0.1.0"
+dynamic = ["version"]  # single source of truth: src/harness_core/__init__.py:__version__
 description = "Agent-agnostic agent-eval harness: agent-with-tools → run → LLM judge → control-arm comparison. Extracted from the graf monorepo."
 readme = "README.md"
-# PEP 758 (unparenthesized `except` tuples, sweep.py) and `type` statement aliases
-# (types.py) require 3.14 / 3.12+ respectively. The whole package is pinned to 3.14.
+# `type` statement aliases (types.py) need 3.12+; PEP 758 unparenthesized `except` was the only
+# 3.14-only construct and is now parenthesized, so the floor could drop to 3.12 once tested on
+# it — kept at 3.14 (the verified runtime) until a 3.12 CI matrix proves it.
 requires-python = ">=3.14"
 license = { text = "Proprietary" }
 authors = [{ name = "Naboo" }]
@@ -62,12 +63,22 @@ dev = [
 # library is what must type-check. SDK TypedDict subscripts in tests produce inherent noise.
 exclude = ["**/test_*.py"]
 
+[project.urls]
+Repository = "https://github.com/nabooai/harness-core"
+Changelog = "https://github.com/nabooai/harness-core/blob/main/CHANGELOG.md"
+
 [project.scripts]
 # `harness-core ...` -> the package __main__ (server | analyze | list).
 harness-core = "harness_core.__main__:main"
 
+[tool.hatch.version]
+path = "src/harness_core/__init__.py"  # reads __version__
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/harness_core"]
+# the suite lives beside the modules (the iron-rule/overfit tests glob the package dir), but it
+# must NOT ship in the wheel — a consumer's pytest would otherwise collect our tests.
+exclude = ["**/test_*.py"]
 
 [tool.hatch.build.targets.wheel.force-include]
 # Ship the package docs inside the wheel so `ADDING_A_TARGET.md` travels with the lib.

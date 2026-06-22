@@ -409,7 +409,6 @@ wheels = [
 
 [[package]]
 name = "harness-core"
-version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "litellm" },
@@ -448,7 +447,7 @@ requires-dist = [
     { name = "opentelemetry-sdk", marker = "extra == 'langsmith'", specifier = ">=1.25.0" },
     { name = "uvicorn", marker = "extra == 'server'", specifier = ">=0.45.0" },
 ]
-provides-extras = ["server", "langsmith"]
+provides-extras = ["langsmith", "server"]
 
 [package.metadata.requires-dev]
 dev = [
