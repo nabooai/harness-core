@@ -4,7 +4,7 @@ All notable changes to harness-core. Follows [Keep a Changelog](https://keepacha
 and [Semantic Versioning](https://semver.org/). The public API is what's re-exported from
 `harness_core` (see `__all__`); deeper imports are internal and may change without a bump.
 
-## [Unreleased]
+## [0.2.0] - 2026-06-22
 
 ### Added
 - **Public API** — `harness_core` re-exports the supported surface (`__all__`) + `__version__`;
@@ -27,6 +27,9 @@ and [Semantic Versioning](https://semver.org/). The public API is what's re-expo
   economics auto-pushed), `langsmith_pull` (`pull` / `push_feedback` / `attach_metadata`),
   `trace_audit` (improvement-readiness), agent-vs-judge trace role tagging.
 - **DX** — `ToolAgentTarget` + `SimpleState` fast path; `examples/weather_agent/`.
+- **Claude Code plugin** — this repo is a plugin marketplace (`.claude-plugin/marketplace.json`)
+  with a `harness-core` plugin shipping 5 skills (quickstart / add-target / run-eval /
+  compare-and-audit / langsmith): `/plugin marketplace add nabooai/harness-core`.
 - **Tooling** — `ty` is green on the library (CI runs it); tests excluded from the wheel;
   single-source `__version__`.
 
