@@ -1,99 +1,111 @@
 # harness-core
 
-The **agent-agnostic agent-eval harness**: an agent with tools → runs → produces a response
-→ an LLM judge scores it → compared against a first-principles control arm. It drives **any**
+The **agent-agnostic agent-eval harness**: an agent with tools → runs → produces a response →
+an LLM judge scores it → compared against a first-principles control arm. It drives **any**
 agent that satisfies the `HarnessTarget` protocol and knows nothing about the agent's domain.
 
-This file is the guide for an AI agent (or a human) working in this repo. Read
-[`README.md`](README.md) for the user-facing intro, [`ADDING_A_TARGET.md`](ADDING_A_TARGET.md)
-for the authoritative target contract, and [`docs/INTERNALS.md`](docs/INTERNALS.md) for the
-module-by-module deep dive.
+This file guides an AI agent (or a human) working in this repo. See [`README.md`](README.md)
+for the user intro, [`ADDING_A_TARGET.md`](ADDING_A_TARGET.md) for the authoritative target
+contract, [`docs/INTERNALS.md`](docs/INTERNALS.md) for the module deep dive, and
+[`docs/TRACING.md`](docs/TRACING.md) for the LangSmith integration.
 
 ## The iron rule (pinned by `src/harness_core/test_iron_rule.py`)
 
 CORE modules import **only** `harness_core.*` + the OpenAI Agents SDK + litellm + stdlib —
-**never** a target package, **never** a host application. Targets import `harness_core`; the
-core never imports them. If you reach for a host/domain type inside `src/harness_core/`, you
-are breaking the layering — it belongs on the target or the `World`. The gate is a real test:
-it greps every import form + bans host filesystem-path literals.
+**never** a target package, **never** a host app, **never** a tracing vendor (LangSmith). The
+gate greps every import form + bans host filesystem-path literals. Consequences:
+
+- A target (graf, the weather example, …) imports `harness_core`; the core never imports it.
+- The LangSmith seam lives ONLY in `langsmith_export.py` / `langsmith_pull.py` (which DO import
+  `langsmith`, behind the `langsmith` extra). `runner`/`loop`/`experiment_runner` never do — the
+  agent-vs-judge trace tagging uses generic `agents.trace(metadata=…)`, not a LangSmith call.
 
 ## Layout
 
 ```
 src/harness_core/
-  target.py       HarnessTarget protocol + BaseHarnessTarget (graf-free defaults) + HarnessState
+  target.py       HarnessTarget protocol + BaseHarnessTarget (graf-free defaults)
+                  + SimpleState + ToolAgentTarget (the bare-agent fast path) + HarnessState
   experiment.py   Experiment — the verbatim human brief + run knobs
   world.py        World / WorldHandle / NullWorld — the backend a run executes against
   scenario.py     Scenario + JudgeSpec — one reproducible run+judge cell
-  loop.py         run_agent / run_agent_sync — the streamed turn loop; grounding reconstructors
+  loop.py         run_agent / run_agent_sync — the streamed turn loop (tags the agent trace
+                  role=agent); tool_calls_from_result / transcript_from_result for grounding
   runner.py       run() / run_experiment() — one observation → a recorded, judged RunRecord
-  judge.py        LLMJudge + Rubric — pinned rubric over a provenance-blind Excerpt
+  judge.py        LLMJudge + Rubric — judge over a blind excerpt (its trace is tagged role=judge)
   record.py       SessionLog / Manifest / RunRecord / aggregate / Wilson bounds / gap thermometer
   metrics.py      per-run quality (turns/problems/smells) + economics (tokens/cost/time)
-  tracing.py      agents-SDK span capture → drained onto the session log + the judge excerpt
+  tracing.py      agents-SDK span capture → session log + judge excerpt
   transport.py    litellm per-event-loop hygiene + resolve_model
   sweep.py        the measurement engine: N reps × arms → cells + signals
-  steer.py        generic pre-turn steering policy
-  checklists.py   the Checklist shape (per-scenario content stays target-side)
-  overfit_gate.py brand/scenario-overfit gate (injected vocabulary; core is brand-free)
-  refusal_audit.py honest-vs-lazy refusal audit
-  types.py        the data contracts (JSON, QueryCall, ToolCall, Excerpt, Verdict, TrialOutcome)
-  analyze_trace.py / analyze_session.py   CLI trace readers (local run dirs)
+  steer.py / checklists.py / overfit_gate.py / refusal_audit.py   judging + quality machinery
   experiment_runner.py  run_suite — run a scenario suite under one experiment_id (+ ledger)
-  langsmith_export.py   enable_langsmith — export agent runs to LangSmith tagged with experiment_id
-  langsmith_pull.py  pull a full trace back out of LangSmith (PulledRun tree) + push_feedback
-  trace_audit.py  audit a pulled trace for improvement-readiness (required signals + fixes)
-  results.py      graf-free run-dir reader (the dashboard's data layer)
-  server.py       FastAPI read-API + dashboard; static/index.html is the no-build UI
-  __main__.py     `harness-core {server,list,analyze}`
-  test_*.py       the suite (lives beside the modules: the iron-rule + overfit tests glob here)
+  langsmith_export.py   enable_langsmith / sync_to_langsmith / run_suite_traced — LangSmith seam
+  langsmith_pull.py     pull a full trace back (PulledRun) + push_feedback + attach_metadata
+  trace_audit.py        audit a pulled trace for improvement-readiness (required signals + fixes)
+  analyze_trace.py / analyze_session.py   CLI readers for local run dirs
+  results.py / server.py / static/index.html   the local run dashboard (read-API + UI)
+  __main__.py     `harness-core {server,list,analyze,pull}`
+  types.py        the data contracts (JSON, QueryCall, ToolCall, Excerpt, Verdict, TrialOutcome)
+  test_*.py       the suite (lives beside the modules — iron-rule + overfit tests glob here)
 ```
 
 ## Develop
 
-Python **≥ 3.14** (the code uses PEP 758 unparenthesized `except` and `type` statement aliases).
+Python **≥ 3.14** (PEP 758 unparenthesized `except` + `type` statement aliases).
 
 ```bash
-uv sync                       # install the project + dev group into .venv (writes uv.lock)
+uv sync                       # install + dev group into .venv (writes uv.lock)
 uv run pytest -q              # the suite
 uv run ruff check src/harness_core
-uv run harness-core server    # the dashboard at http://127.0.0.1:8077 (needs the synced env)
-uv build --wheel              # build the distributable
+uv build --wheel
 ```
 
-Two tests (`test_parity_fda.py`, `test_loop_generic.py`, plus one case in `test_phase5_run.py`)
-`importorskip` graf-side targets that aren't part of this repo — they SKIP here and run wherever
-those targets are installed. Everything else is self-contained.
-
-## Conventions
-
-- **Strong typing, no `Any`/bare `dict`/`object`.** Arbitrary data is `JSON`/`JSONObject` (the
-  recursive aliases in `types.py`); narrow at SDK boundaries with `isinstance`, not `getattr`.
-- **ANN gate is on** (ruff `E/F/I/UP/ANN`, line-length 100). Tests are ANN-exempt; `judge.py`
-  and `loop.py` carry pre-existing typing debt (per-file-ignored — pay down, don't add).
-- **Recording/tracing is best-effort** — capture must never crash a run (wrap in `try/except`,
-  `# noqa: BLE001`).
-- **Brand-free core.** Anything scenario/connector-specific belongs on the target or the
-  injected vocabulary, never in `src/harness_core/`. The overfit gate enforces it.
-- New tests must be **parallel-safe**: isolate cwd/env/fs via `tmp_path` + `monkeypatch`.
+`test_parity_fda.py` / `test_loop_generic.py` / one case in `test_phase5_run.py` `importorskip`
+graf-side targets and SKIP here. Everything else is self-contained.
 
 ## Adding a target
 
-Subclass `BaseHarnessTarget`, implement the five required members (`build_agent`, `new_state`,
-`excerpt`, `judge`, `system_prompt_text`) + the `name`/`scenario_dir` attrs, and run it with
-`harness_core.runner.run(scenario, target, judge=..., session_root=...)`. See
-[`ADDING_A_TARGET.md`](ADDING_A_TARGET.md).
+- **Bare openai-agents tool agent** (no graf/config): subclass `ToolAgentTarget`, implement
+  `name` + `build_agent` + `judge` + `system_prompt_text`. `new_state` (a `SimpleState`) and
+  `excerpt` (tool-call + transcript grounding from the SDK result) are provided. Worked example:
+  [`examples/weather_agent/`](examples/weather_agent/).
+- **Config-mutating target** (graf-style): subclass `BaseHarnessTarget`, implement the five
+  required members + the optional run-setup seams. See [`ADDING_A_TARGET.md`](ADDING_A_TARGET.md).
 
-## The server / webapp
+Run one cell with `runner.run(scenario, target, judge=…, session_root=…)`; a suite with
+`experiment_runner.run_suite(...)`; a LangSmith-wired suite with
+`langsmith_export.run_suite_traced(...)`.
 
-`harness_core.server.create_app()` builds a FastAPI app over `harness_core.results` (a graf-free
-reader of run dirs). It serves a self-contained dashboard (`static/index.html`) — run list +
-scoreboard, and a per-run detail with economics, brief/answer, an interactive trace waterfall,
-and the timeline. Mount it (`app.mount("/harness-core", create_app())`) or run it standalone
-(`harness-core server`). Run roots resolve from `$HARNESS_RUNS_ROOTS` / `$HARNESS_RUNS_BASE`.
+## Experiments & LangSmith
 
-This dashboard is for the harness's **eval results**. Live **trace observability** (litellm /
-openai-agents-SDK / custom tools) is delegated to **LangSmith** — there is NO bespoke OTLP
-collector here (we evaluated one and chose LangSmith). See [`docs/TRACING.md`](docs/TRACING.md):
-`litellm.callbacks=["langsmith"]`, OpenInference→OTLP for the agents-SDK, and `@traceable` /
-custom OTEL spans for your own tools. The `langsmith` extra carries those deps.
+- **`run_suite`** runs every `Scenario` under one `experiment_id`, grouping run dirs under
+  `session_root/<experiment_id>/` + an `experiment.json` ledger.
+- **`run_suite_traced`** = `enable_langsmith` + `run_suite` + `sync_to_langsmith`: one call that
+  tags every trace with the experiment_id, runs the suite, and auto-pushes each run's verdict
+  (feedback `pass`) + economics (cost/cached/reasoning/wall/requests).
+- Agent-vs-judge: the agent trace is `run:<scenario>` (`metadata.harness.role=agent`); the judge
+  trace is `judge` (`metadata.harness.role=judge`) — set generically in `loop.py` / `judge.py`.
+- **Pull + audit** (`langsmith_pull` / `trace_audit`): pull a trace back as a `PulledRun` tree
+  and audit improvement-readiness (task / answer / grounded I/O / model / tokens / latency /
+  verdict). `harness-core pull --project P --experiment E`.
+
+## Conventions
+
+- **Strong typing**, no `Any`/bare `dict`/`object` in contracts — arbitrary data is
+  `JSON`/`JSONObject` (`types.py`); narrow at SDK boundaries with `isinstance`, not `getattr`.
+  (`langsmith_pull` is the deliberate exception — it reads LangSmith `Run` objects via defensive
+  `getattr`, so it carries `object`-typed helpers + ty-ignores.)
+- **ANN gate on** (ruff `E/F/I/UP/ANN`, line-length 100). Tests are ANN-exempt; `judge.py` /
+  `loop.py` carry pre-existing typing debt (per-file-ignored — pay down, don't add).
+- **Recording/tracing is best-effort** — capture never crashes a run (`try/except`, `# noqa: BLE001`).
+- **Brand-free core** — scenario/connector specifics belong on the target or injected
+  vocabulary, never in `src/harness_core/`. The overfit gate enforces it (don't introduce a
+  `*_KEY`/`ABC-123`/`/pull/`-shaped literal in a core module).
+- New tests must be **parallel-safe**: isolate cwd/env/fs via `tmp_path` + `monkeypatch`.
+
+## In-repo mirror
+
+The graf monorepo carries a byte-identical mirror at `harness_core/`. Edit the standalone
+(`src/harness_core/`), then `python tools/check_drift.py --sync` to mirror it. The README,
+CLAUDE.md, docs, and `examples/` are standalone-only (not mirrored).
