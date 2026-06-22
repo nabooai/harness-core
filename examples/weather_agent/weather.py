@@ -18,6 +18,7 @@ from pathlib import Path
 from agents import Agent, function_tool
 
 from harness_core.experiment import Experiment
+from harness_core.experiment_runner import SuiteSpec
 from harness_core.judge import LLMJudge, Rubric
 from harness_core.scenario import JudgeSpec, Scenario
 from harness_core.target import ToolAgentTarget
@@ -79,6 +80,22 @@ def _scenarios(model: ModelArg) -> list[Scenario]:
         Scenario(intent=e, world=NullWorld(), judge=JudgeSpec(rubric=RUBRIC), model=model)
         for e in SCENARIOS
     ]
+
+
+def suite_spec() -> SuiteSpec:
+    """The `() -> SuiteSpec` factory the CLI uses:
+    `harness-core run --target weather:suite_spec [--traced] [--baseline ID]`."""
+    model = "gpt-4o-mini"
+    target = WeatherTarget()
+    return SuiteSpec(
+        scenarios=_scenarios(model),
+        target=target,
+        judge=target.judge(model),
+        model=model,
+        model_name=model,
+        judge_model=model,
+        project="weather-agent",
+    )
 
 
 def main() -> int:

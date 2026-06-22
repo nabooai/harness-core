@@ -18,8 +18,10 @@ from __future__ import annotations
 
 __version__ = "0.1.0"
 
+from harness_core.compare import ExperimentDiff, compare_experiments
 from harness_core.experiment import Experiment
-from harness_core.experiment_runner import SuiteResult, new_experiment_id, run_suite
+from harness_core.experiment_audit import ExperimentAudit, audit_experiment
+from harness_core.experiment_runner import SuiteResult, SuiteSpec, new_experiment_id, run_suite
 from harness_core.judge import GENERIC_RUBRIC, LLMJudge, Rubric
 from harness_core.metrics import Economics, RunMetrics
 from harness_core.record import (
@@ -59,6 +61,8 @@ __all__ = [
     "Economics",
     "Excerpt",
     "Experiment",
+    "ExperimentAudit",
+    "ExperimentDiff",
     "HarnessState",
     "HarnessTarget",
     "JSONObject",
@@ -76,7 +80,10 @@ __all__ = [
     "SessionLog",
     "SimpleState",
     "SuiteResult",
+    "SuiteSpec",
     "ToolAgentTarget",
+    "audit_experiment",
+    "compare_experiments",
     "ToolCall",
     "TrialOutcome",
     "Verdict",

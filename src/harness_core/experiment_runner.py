@@ -37,6 +37,24 @@ def new_experiment_id(prefix: str = "exp") -> str:
 
 
 @dataclass(frozen=True)
+class SuiteSpec:
+    """Everything needed to run one suite — what a CLI target factory returns. The
+    `harness-core run --target pkg.module:factory` command imports `factory`, calls it for a
+    `SuiteSpec`, and runs it (keeping the core target-free — it never imports the target). All
+    the run knobs `run_suite`/`run_suite_traced` accept, in one value."""
+
+    scenarios: Sequence[Scenario]
+    target: HarnessTarget
+    judge: JudgeFn
+    model: ModelArg = None
+    model_name: str = ""
+    vault_names: tuple[str, ...] = ()
+    judge_model: str = ""
+    judge_factory: Callable[[Scenario], JudgeFn] | None = None
+    project: str | None = None  # LangSmith project, for the traced path
+
+
+@dataclass(frozen=True)
 class SuiteResult:
     """The outcome of running a scenario suite under one experiment_id."""
 

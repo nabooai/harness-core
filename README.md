@@ -140,11 +140,21 @@ Mount it in an existing app: `app.mount("/harness-core", create_app())`. Run roo
 ## CLI
 
 ```bash
+harness-core run --target pkg.mod:factory       # run a target's suite; exit≠0 on a regression
+harness-core run --target … --baseline <id>     # gate against a pinned baseline experiment
+harness-core run --target … --traced            # + export to LangSmith (langsmith extra)
+harness-core compare <baseline_id> <candidate_id> [--gate]   # diff two experiments
+harness-core audit <experiment_id>              # cluster an experiment's failures
 harness-core list   --limit 20                  # recent run summaries (JSON)
 harness-core analyze <run-id|path>              # full local trace (verdict, spans, timeline)
 harness-core pull   <run-id>                    # pull a LangSmith trace + audit it
 harness-core server                             # the dashboard
 ```
+
+`run --target` imports a `() -> SuiteSpec` factory (so the core never imports your target).
+`compare` joins by `(scenario, floor)` and flags **significant** pass-rate regressions (disjoint
+Wilson intervals) + cost deltas; `audit` clusters failing runs by normalized judge reason →
+"the dominant failure mode + the scenarios to open". All are CI-gateable via the exit code.
 
 ## Develop
 
