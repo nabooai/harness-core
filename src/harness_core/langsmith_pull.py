@@ -168,6 +168,20 @@ def push_feedback(
     )
 
 
+def attach_metadata(run_id: str, metadata: JSONObject, *, client: object | None = None) -> None:
+    """Merge `metadata` into a trace's run metadata (visible in LangSmith's Metadata panel).
+    Reads the run first and merges, so existing keys (ls_*) survive. Use this to attach the
+    harness's full economics (cost / cached / reasoning / wall-clock) that LangSmith doesn't
+    compute for an unpriced model — e.g. `attach_metadata(id, {"economics": econ})`."""
+    client = client or _client()
+    run = client.read_run(run_id)  # type: ignore[attr-defined]
+    extra = dict(_as_obj(_get(run, "extra")))
+    md = dict(extra.get("metadata") if isinstance(extra.get("metadata"), dict) else {})
+    md.update(metadata)
+    extra["metadata"] = md
+    client.update_run(run_id, extra=extra)  # type: ignore[attr-defined]
+
+
 def pull_project(
     project: str,
     *,

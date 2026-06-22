@@ -178,6 +178,28 @@ def test_push_feedback_attaches_the_verdict() -> None:
     assert next(r for r in trace_audit.audit(root).results if r.code == "VERDICT").ok
 
 
+def test_attach_metadata_merges_without_clobbering() -> None:
+    """attach_metadata merges into extra.metadata, preserving existing (ls_*) keys."""
+    from harness_core.langsmith_pull import attach_metadata
+
+    class _C:
+        def __init__(self) -> None:
+            self.run = SimpleNamespace(id="r1", extra={"metadata": {"ls_run_depth": 0}})
+            self.updated: dict[str, object] = {}
+
+        def read_run(self, run_id: str) -> SimpleNamespace:
+            return self.run
+
+        def update_run(self, run_id: str, **kw: object) -> None:
+            self.updated = {"run_id": run_id, **kw}
+
+    c = _C()
+    attach_metadata("r1", {"economics": {"cost_usd": 0.004}}, client=c)
+    md = c.updated["extra"]["metadata"]  # type: ignore[index]
+    assert md["ls_run_depth"] == 0  # existing key preserved
+    assert md["economics"] == {"cost_usd": 0.004}  # new key merged in
+
+
 def test_pull_builds_the_tree_from_an_injected_client() -> None:
     runs = [
         _run(

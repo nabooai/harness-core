@@ -138,6 +138,36 @@ Proven end-to-end on the schema explorer: 3 scenarios → one experiment_id → 
 (scenario roots + nested judge/sub-agent traces) → pulled by experiment_id → after
 `push_feedback`, each audits `improvement-ready 8/8`.
 
+### Roles: telling the agent apart from the judge
+
+Each run also spins up an LLM **judge**. Both the agent-under-test and the judge are tagged so
+you can tell them apart (and filter) in LangSmith — generic `metadata.harness.role` on the
+trace, set by the harness (no tracing-vendor coupling):
+
+- agent-under-test trace → `run:<scenario>`, `metadata.harness.role = "agent"`
+- judge trace → `judge`, `metadata.harness.role = "judge"`
+
+Filter the runs list by `metadata.harness.role = agent` to score just the agent, or `= judge`
+to inspect judging.
+
+### Seeing price / cached / the full economics
+
+LangSmith natively shows **prompt/completion/total tokens + latency** per run. It does NOT
+compute **cost** for a model it can't price (e.g. a `gemini/*-preview` via litellm — native
+cost is `None`), and it doesn't surface cached/reasoning token splits. The harness computes all
+of these (cost via litellm pricing); attach them as numeric **feedback** so they become sortable
+columns + charts in the runs table:
+
+```python
+from harness_core.langsmith_export import attach_economics
+attach_economics(run_id, record)   # run_id == the SDK trace_id; record = the harness RunRecord
+```
+
+This pushes `cost_usd`, `cached_tokens`, `reasoning_tokens`, `wall_clock_s`, `llm_requests` as
+feedback (additive — never conflicts with the live exporter, unlike `update_run`). Enable those
+columns in the project runs table, or chart them on the Monitor tab. (To get cost into the
+NATIVE cost column instead, add the model's pricing in LangSmith → Settings → Models.)
+
 ## Pulling & auditing traces (the improvement loop)
 
 A trace is only useful if it carries what you reason over to IMPROVE the agent. harness-core

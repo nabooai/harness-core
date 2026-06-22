@@ -603,7 +603,12 @@ async def run_agent(
     # per-span timing, drained at the end onto the step log (graf-free; best-effort, never
     # fails the run). mark_as_current=True so Runner's spans nest under it.
     tracing.install()
-    _trace = trace(workflow_name=f"run:{experiment.name}")
+    # tag the agent-under-test trace with a generic role + scenario (the JUDGE trace gets
+    # role="judge"); a tracing backend (LangSmith etc.) can then tell them apart + filter.
+    _trace = trace(
+        workflow_name=f"run:{experiment.name}",
+        metadata={"harness.role": "agent", "scenario": experiment.name},
+    )
     _trace.start(mark_as_current=True)
     _trace_id = _trace.trace_id
     # GROUNDING is the target's concern (the build agent does preflight/prior-turn

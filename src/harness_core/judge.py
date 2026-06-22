@@ -781,7 +781,7 @@ def _sdk_complete(model: ModelArg) -> Callable[[str, str], str]:
     def _complete(system: str, user: str) -> str:
         import asyncio
 
-        from agents import Agent, ModelSettings, Runner
+        from agents import Agent, ModelSettings, Runner, trace
 
         from harness_core.transport import resolve_model
 
@@ -801,9 +801,13 @@ def _sdk_complete(model: ModelArg) -> Callable[[str, str], str]:
             from harness_core.transport import aclose_current_loop_transport
 
             try:
-                return await asyncio.wait_for(
-                    Runner.run(agent, user, max_turns=1), timeout=_JUDGE_TIMEOUT_S
-                )
+                # name the judge's OWN trace + tag it so it's identifiable as the JUDGE (not
+                # the agent-under-test) in any tracing backend (LangSmith etc.). `metadata` is
+                # a generic agents-SDK trace field -- no tracing-vendor import here.
+                with trace(workflow_name="judge", metadata={"harness.role": "judge"}):
+                    return await asyncio.wait_for(
+                        Runner.run(agent, user, max_turns=1), timeout=_JUDGE_TIMEOUT_S
+                    )
             finally:
                 # close this loop's litellm transport before asyncio.run tears it down
                 # (else GC finalizes the httpx transport on a dead loop -- "Event loop is closed")
