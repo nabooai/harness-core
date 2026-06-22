@@ -1,0 +1,21 @@
+{
+  "name": "nabooai",
+  "owner": {
+    "name": "Naboo",
+    "url": "https://github.com/nabooai"
+  },
+  "metadata": {
+    "description": "Naboo Claude Code plugins"
+  },
+  "plugins": [
+    {
+      "name": "harness-core",
+      "source": "./plugins/harness-core",
+      "description": "Skills to set up and run harness-core — the agent-agnostic agent-eval harness: scaffold a target, run judged scenario suites, gate regressions, compare/audit experiments, and wire LangSmith tracing.",
+      "version": "0.1.0",
+      "author": { "name": "Naboo" },
+      "homepage": "https://github.com/nabooai/harness-core",
+      "keywords": ["llm", "agent", "evaluation", "harness", "judge", "langsmith", "openai-agents"]
+    }
+  ]
+}

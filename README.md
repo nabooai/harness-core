@@ -168,6 +168,20 @@ uv build --wheel
 Two cross-package parity tests `importorskip` graf-side targets, so they skip in this repo and
 run wherever those targets are installed.
 
+## Claude Code plugin (skills)
+
+This repo is also a Claude Code **plugin marketplace** — install the skills so Claude can set up
+and drive harness-core in any project:
+
+```
+/plugin marketplace add nabooai/harness-core
+/plugin install harness-core@nabooai
+```
+
+Skills: `/harness-core:quickstart` (scaffold + first eval), `:add-target`, `:run-eval`
+(run + CI gate), `:compare-and-audit`, `:langsmith`. Or just describe the task and Claude loads
+the right one. See [`plugins/harness-core/`](plugins/harness-core/).
+
 ## Status & provenance
 
 Extracted from the graf monorepo (where `harness_core/` is still the in-use mirror, kept in
