@@ -117,6 +117,24 @@ from harness_core.server import create_app
 app.mount("/harness-core", create_app())
 ```
 
+This dashboard shows the harness's **eval** results (pass / Wilson / gap / economics + the
+per-run trace). For live **observability** of litellm / the openai-agents-SDK / your own tools,
+use LangSmith — see below.
+
+## Observability (LangSmith)
+
+harness-core does two things: the **eval harness** (above — the methodology LangSmith does not
+replace) and, separately, **trace observability**, for which we use **LangSmith** rather than a
+bespoke collector. It's all OpenTelemetry / the LangSmith SDK, so there's no extra server to run.
+
+- **litellm** → `litellm.callbacks = ["langsmith"]`
+- **openai-agents-SDK** → OpenInference instrumentation → OTLP → LangSmith
+- **your custom tools / traces** → the `@traceable` decorator, custom OTEL spans
+  (`langsmith.span.kind`), or `agents.tracing.custom_span(...)` — all first-class
+
+Full wiring (endpoints, headers, custom-tool examples) is in
+[`docs/TRACING.md`](docs/TRACING.md). Install the deps with `pip install harness-core[langsmith]`.
+
 ## CLI
 
 ```bash

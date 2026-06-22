@@ -25,19 +25,27 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# The HTTP server (harness_core.server): a graf-free read-API + dashboard over run dirs.
+# The HTTP server + run dashboard (harness_core.server): a graf-free read-API + dashboard
+# over the harness's own run dirs (pass / turns / tokens / cost / time + the trace waterfall).
 server = [
     "fastapi>=0.136.0",
     "uvicorn>=0.45.0",
 ]
-# Optional tracing processor a host can install (the same one the graf webapp uses).
-tracing = [
-    "openinference-instrumentation-openai-agents>=1.5.1",
+# LangSmith observability: export the harness's agent runs (and any litellm / openai-agents-SDK
+# spans) to LangSmith over OTLP. See docs/TRACING.md. The harness EVAL methodology stays local;
+# this is purely for the trace UI. Optional — install only if you use LangSmith.
+langsmith = [
+    # native LangSmith SDK + its first-class openai-agents-SDK integration (a tracing
+    # processor — no OTEL needed for the agents path). `@traceable` for custom tools/traces.
+    "langsmith[openai-agents]>=0.1.0",
+    # OTEL transport, for the vendor-neutral custom-span path (docs/TRACING.md option B).
+    "opentelemetry-sdk>=1.25.0",
+    "opentelemetry-exporter-otlp-proto-http>=1.25.0",
 ]
 
 # Dev tooling lives in a uv dependency-group (installed by default on `uv sync`, but NEVER
-# shipped in the wheel). It includes the `server` deps + httpx so the WHOLE test suite runs
-# without a separate `--extra server`.
+# shipped in the wheel). Includes the server deps + httpx so the WHOLE test suite runs on a
+# plain `uv sync`.
 [dependency-groups]
 dev = [
     "pytest>=8.0.0",

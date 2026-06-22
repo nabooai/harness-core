@@ -87,3 +87,9 @@ reader of run dirs). It serves a self-contained dashboard (`static/index.html`) 
 scoreboard, and a per-run detail with economics, brief/answer, an interactive trace waterfall,
 and the timeline. Mount it (`app.mount("/harness-core", create_app())`) or run it standalone
 (`harness-core server`). Run roots resolve from `$HARNESS_RUNS_ROOTS` / `$HARNESS_RUNS_BASE`.
+
+This dashboard is for the harness's **eval results**. Live **trace observability** (litellm /
+openai-agents-SDK / custom tools) is delegated to **LangSmith** — there is NO bespoke OTLP
+collector here (we evaluated one and chose LangSmith). See [`docs/TRACING.md`](docs/TRACING.md):
+`litellm.callbacks=["langsmith"]`, OpenInference→OTLP for the agents-SDK, and `@traceable` /
+custom OTEL spans for your own tools. The `langsmith` extra carries those deps.
