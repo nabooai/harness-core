@@ -169,6 +169,62 @@ def harness_names() -> list[str]:
     return list(_roots().keys())
 
 
+def _experiment_files() -> list[Path]:
+    """Every `experiment.json` ledger under the known roots (written by run_suite)."""
+    out: list[Path] = []
+    for root in _roots().values():
+        if root.exists():
+            out.extend(sorted(root.rglob("experiment.json")))
+    return out
+
+
+def list_experiments(*, limit: int | None = None) -> list[dict]:
+    """Summary of each experiment (newest first): id, agent, model, n/passes, created_utc.
+    Reads the `experiment.json` ledgers run_suite writes — the cross-experiment view."""
+    rows: list[tuple[float, dict]] = []
+    for f in _experiment_files():
+        d = _read_dict(f)
+        if not d.get("experiment_id"):
+            continue
+        try:
+            ts = f.stat().st_mtime
+        except OSError:
+            ts = 0.0
+        rows.append(
+            (
+                ts,
+                {
+                    "experiment_id": d.get("experiment_id"),
+                    "agent": d.get("agent"),
+                    "model": d.get("model"),
+                    "n": d.get("n"),
+                    "passes": d.get("passes"),
+                    "created_utc": d.get("created_utc"),
+                    "path": str(f),
+                },
+            )
+        )
+    rows.sort(key=lambda r: r[0], reverse=True)
+    out = [r[1] for r in rows]
+    return out[:limit] if limit is not None else out
+
+
+def load_experiment(experiment_id: str) -> dict | None:
+    """The full reloaded ledger for one experiment_id (scenarios + cells + economics), or
+    None if not found. The reloadable unit a cross-experiment diff / CI gate consumes."""
+    for f in _experiment_files():
+        if f.parent.name == experiment_id:
+            d = _read_dict(f)
+            if d.get("experiment_id") == experiment_id:
+                return d
+    # fall back to matching the id field even if the dir name differs
+    for f in _experiment_files():
+        d = _read_dict(f)
+        if d.get("experiment_id") == experiment_id:
+            return d
+    return None
+
+
 def list_cells(*, limit: int | None = None, harness: str | None = None) -> list[dict]:
     """Summary rows per harness_core run, newest (by manifest.json mtime) first. ``limit``
     returns only the latest N -- STAT every candidate (cheap), sort by mtime, slice, then read

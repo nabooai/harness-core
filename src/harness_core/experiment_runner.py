@@ -98,6 +98,11 @@ def run_suite(
         )
         records.append(rec)
 
+    cells = aggregate(records)
+    # A COMPLETE, reloadable ledger (results.load_experiment reads it back): per-scenario it
+    # carries the manifest_sha / trace_id / economics a cross-experiment diff or CI gate needs,
+    # and it persists the aggregated `cells` (Wilson + economics) so a comparison doesn't have
+    # to re-walk run dirs.
     ledger = {
         "experiment_id": eid,
         "agent": target.name,
@@ -108,15 +113,22 @@ def run_suite(
         "scenarios": [
             {
                 "scenario": r.scenario,
+                "manifest_sha": r.manifest,
+                "trace_id": r.trace_id,
                 "outcome": str(r.outcome),
                 "passed": r.passed,
                 "detail": r.detail,
+                "held_out": r.held_out,
+                "ood_class": r.ood_class,
+                "turns": r.turns,
+                "cost_usd": r.cost_usd,
+                "total_tokens": r.total_tokens,
+                "wall_clock_s": r.wall_clock_s,
                 "session": r.session_path,
             }
             for r in records
         ],
+        "cells": cells,
     }
-    (root / "experiment.json").write_text(json.dumps(ledger, indent=2))
-    return SuiteResult(
-        experiment_id=eid, session_root=root, records=records, cells=aggregate(records)
-    )
+    (root / "experiment.json").write_text(json.dumps(ledger, indent=2, default=str))
+    return SuiteResult(experiment_id=eid, session_root=root, records=records, cells=cells)

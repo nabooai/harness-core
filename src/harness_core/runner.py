@@ -260,6 +260,7 @@ def run(
         cached_tokens=econ.cached_tokens,
         reasoning_tokens=econ.reasoning_tokens,
         cost_usd=econ.cost_usd,
+        trace_id=result.trace_id,
     )
     write_run(
         run_dir,

@@ -38,9 +38,20 @@ class Cell(TypedDict, total=False):
     turns_total: int
     problems: dict[str, int]
     smells: dict[str, int]
+    # ECONOMICS aggregated over the SAME effective runs — so cost/latency are a cell-level
+    # signal a decision (regression gate, cost/quality Pareto) can read, not just a per-run
+    # number. Totals are pass-1 accumulators; means + p90 (the tail the mean hides) are derived.
+    cost_total: float
+    tokens_total: int
+    wall_total: float
     rate: float
     wilson_lb: float
     turns_mean: float
+    cost_mean: float
+    tokens_mean: float
+    wall_mean: float
+    cost_p90: float
+    wall_p90: float
 
 
 class ArmStats(TypedDict):
@@ -399,6 +410,10 @@ class RunRecord:
     cached_tokens: int = 0
     reasoning_tokens: int = 0
     cost_usd: float = 0.0
+    # The SDK trace id this run ran under (== the LangSmith run id when traced). Lets the
+    # LangSmith seam attach verdict/economics by id instead of name-matching. "" when the
+    # loop captured no trace. Defaulted -> every existing caller/persisted shape unchanged.
+    trace_id: str = ""
 
     def __post_init__(self) -> None:
         if self.outcome is TrialOutcome.SKIP and not self.skip_reason.strip():
@@ -586,10 +601,23 @@ def wilson_lower_bound_fpc(passes: int, n: int, N: int | None, z: float = 1.96) 
     return max(0.0, (center - margin * fpc) / denom)
 
 
+def _p90(values: list[float]) -> float:
+    """The 90th-percentile value (nearest-rank), or 0.0 for an empty list. Surfaces the
+    latency/cost TAIL the mean hides (the loop's p90-321s/3937s-tail concern)."""
+    if not values:
+        return 0.0
+    ordered = sorted(values)
+    idx = max(0, math.ceil(0.9 * len(ordered)) - 1)
+    return round(ordered[idx], 6)
+
+
 def aggregate(records: list[RunRecord]) -> dict[str, Cell]:
-    """Group runs by manifest into a cell: {n_eff, passes, rate, wilson_lb}.
-    NON_MODEL_OUTCOMES (cold-start/infra) are excluded from n_eff, not counted FAIL."""
+    """Group runs by manifest into a cell: pass tally + quality metrics + economics (cost/
+    tokens/wall mean + p90), over the SAME effective runs. NON_MODEL_OUTCOMES (cold-start/
+    infra) are excluded from n_eff, not counted FAIL."""
     cells: dict[str, Cell] = {}
+    _costs: dict[str, list[float]] = {}  # per-cell cost samples, for p90
+    _walls: dict[str, list[float]] = {}  # per-cell wall-clock samples, for p90
     for r in records:
         c = cells.setdefault(
             r.manifest,
@@ -609,6 +637,9 @@ def aggregate(records: list[RunRecord]) -> dict[str, Cell]:
                 "turns_total": 0,
                 "problems": {},
                 "smells": {},
+                "cost_total": 0.0,
+                "tokens_total": 0,
+                "wall_total": 0.0,
             },
         )
         if r.outcome in NON_MODEL_OUTCOMES:
@@ -619,15 +650,25 @@ def aggregate(records: list[RunRecord]) -> dict[str, Cell]:
         c["n_eff"] += 1
         c["passes"] += int(r.passed)
         c["turns_total"] += r.turns
+        c["cost_total"] += r.cost_usd
+        c["tokens_total"] += r.total_tokens
+        c["wall_total"] += r.wall_clock_s
+        _costs.setdefault(r.manifest, []).append(r.cost_usd)
+        _walls.setdefault(r.manifest, []).append(r.wall_clock_s)
         for code in r.problems:
             c["problems"][code] = c["problems"].get(code, 0) + 1
         for code in r.smells:
             c["smells"][code] = c["smells"].get(code, 0) + 1
-    for c in cells.values():
+    for sha, c in cells.items():
         n = c["n_eff"]
         c["rate"] = (c["passes"] / n) if n else 0.0
         c["wilson_lb"] = wilson_lower_bound(c["passes"], n)
         c["turns_mean"] = (c["turns_total"] / n) if n else 0.0
+        c["cost_mean"] = (c["cost_total"] / n) if n else 0.0
+        c["tokens_mean"] = (c["tokens_total"] / n) if n else 0.0
+        c["wall_mean"] = (c["wall_total"] / n) if n else 0.0
+        c["cost_p90"] = _p90(_costs.get(sha, []))
+        c["wall_p90"] = _p90(_walls.get(sha, []))
     return cells
 
 

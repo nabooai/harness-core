@@ -505,6 +505,7 @@ class AgentResult:
     outcome: TrialOutcome | None
     detail: str
     final_output: str
+    trace_id: str = ""  # the SDK trace id this run ran under (for the tracing seam)
 
 
 def _usage_fields(result: SDKRunResult, model_name: str = "") -> dict[str, float]:
@@ -815,7 +816,9 @@ async def run_agent(
     # empty (a target that curates its own spans wins).
     if _drained_spans and not excerpt.spans:
         excerpt = replace(excerpt, spans=_drained_spans)
-    return AgentResult(excerpt=excerpt, outcome=outcome, detail=detail, final_output=final)
+    return AgentResult(
+        excerpt=excerpt, outcome=outcome, detail=detail, final_output=final, trace_id=_trace_id
+    )
 
 
 def run_agent_sync(

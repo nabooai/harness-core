@@ -79,6 +79,18 @@ def test_run_suite_groups_under_experiment_id(
     assert ledger["n"] == 3 and ledger["passes"] == 2
     assert {s["scenario"] for s in ledger["scenarios"]} == {"alpha", "beta", "gamma"}
     assert "✓ alpha" in res.render() and "✗ beta" in res.render()
+    # the ledger is ENRICHED + reloadable: per-scenario manifest_sha + economics, plus cells
+    alpha = next(s for s in ledger["scenarios"] if s["scenario"] == "alpha")
+    assert alpha["manifest_sha"] == "m-alpha"
+    assert "trace_id" in alpha and "cost_usd" in alpha and "total_tokens" in alpha
+    assert "cells" in ledger and isinstance(ledger["cells"], dict)
+    # results.load_experiment reads it back
+    import harness_core.results as R
+
+    monkeypatch.setenv("HARNESS_RUNS_ROOTS", f"demo={tmp_path}")
+    loaded = R.load_experiment(res.experiment_id)
+    assert loaded is not None and loaded["n"] == 3
+    assert res.experiment_id in {e["experiment_id"] for e in R.list_experiments()}
 
 
 def test_sync_to_langsmith_pushes_verdict_and_economics(tmp_path: Path) -> None:
