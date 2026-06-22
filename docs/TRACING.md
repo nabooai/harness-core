@@ -97,6 +97,41 @@ LangSmith ingests arbitrary OTEL spans and reads `langsmith.span.kind`
 (the harness uses these for its phase timings) is exported by the OpenInference instrumentor in
 the section above, so it lands in LangSmith with its `data` payload intact.
 
+## Pulling & auditing traces (the improvement loop)
+
+A trace is only useful if it carries what you reason over to IMPROVE the agent. harness-core
+ships tooling to pull traces back out of LangSmith and audit that:
+
+```bash
+harness-core pull <run-id>                  # pull a trace + audit improvement-readiness
+harness-core pull --project harness-core --limit 10
+harness-core pull <run-id> --json           # machine-readable (CI gating)
+```
+
+The auditor (`harness_core.trace_audit`) checks each **required** signal — task, final answer,
+grounded tool/LLM I/O, non-blind tool outputs, model identity, tokens, latency, and the
+**verdict** — plus recommended ones (reasoning, dollar cost) and reports what's missing with a
+fix. `harness-core pull` exits non-zero if any trace is missing a required signal.
+
+Programmatic:
+```python
+from harness_core.langsmith_pull import pull
+from harness_core.trace_audit import audit, render
+print(render(audit(pull("<run-id>"))))
+```
+
+### Closing the #1 gap: attach the verdict
+
+Out of the box a LangSmith trace has **no verdict** — it can't tell the loop which runs were
+good. After a harness run, attach its judge verdict as feedback (the audit's VERDICT fix):
+
+```python
+from harness_core.langsmith_pull import push_feedback
+push_feedback(run_id, key="pass", score=1.0, comment=verdict.reason)  # 0.0 for a fail
+```
+
+Re-auditing then shows `VERDICT ✓` and `IMPROVEMENT-READINESS: ✓ READY`.
+
 ## (Optional) the harness's own runs → LangSmith
 
 The harness records each run locally (run dirs + the dashboard). To *also* watch them live in

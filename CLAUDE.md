@@ -38,7 +38,9 @@ src/harness_core/
   overfit_gate.py brand/scenario-overfit gate (injected vocabulary; core is brand-free)
   refusal_audit.py honest-vs-lazy refusal audit
   types.py        the data contracts (JSON, QueryCall, ToolCall, Excerpt, Verdict, TrialOutcome)
-  analyze_trace.py / analyze_session.py   CLI trace readers
+  analyze_trace.py / analyze_session.py   CLI trace readers (local run dirs)
+  langsmith_pull.py  pull a full trace back out of LangSmith (PulledRun tree) + push_feedback
+  trace_audit.py  audit a pulled trace for improvement-readiness (required signals + fixes)
   results.py      graf-free run-dir reader (the dashboard's data layer)
   server.py       FastAPI read-API + dashboard; static/index.html is the no-build UI
   __main__.py     `harness-core {server,list,analyze}`

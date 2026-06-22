@@ -135,6 +135,25 @@ bespoke collector. It's all OpenTelemetry / the LangSmith SDK, so there's no ext
 Full wiring (endpoints, headers, custom-tool examples) is in
 [`docs/TRACING.md`](docs/TRACING.md). Install the deps with `pip install harness-core[langsmith]`.
 
+### Pull & audit traces (improvement-readiness)
+
+A trace only helps you improve the agent if it carries the right signals. harness-core can pull
+traces back out of LangSmith and audit them:
+
+```bash
+harness-core pull <run-id>                       # pull a trace + audit it
+harness-core pull --project harness-core --limit 10
+```
+
+The auditor flags any **required** signal that's missing — task, final answer, grounded tool/LLM
+I/O, model identity, tokens, latency, and the **verdict** — with a fix for each. The most common
+gap is the verdict (a raw trace has none); attach it so the loop knows good from bad:
+
+```python
+from harness_core.langsmith_pull import push_feedback
+push_feedback(run_id, key="pass", score=1.0, comment=reason)
+```
+
 ## CLI
 
 ```bash
