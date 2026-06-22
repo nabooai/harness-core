@@ -104,30 +104,15 @@ def sync_to_langsmith(
     wait_s: float = 20.0,
 ) -> int:
     """Push each suite run's VERDICT (feedback `pass` 1.0/0.0) + ECONOMICS to its LangSmith
-    trace. FAST PATH: a record carries the SDK `trace_id` (== the LangSmith run id), so we push
-    DIRECTLY by id — no name-matching, no poll, no collision/100-cap/flush race. FALLBACK (for
-    records with no trace_id): match by `run:<scenario>` name within the experiment tag, polling
-    up to `wait_s`. Returns the number of runs synced. Idempotent-ish: feedback is additive."""
+    trace, AFTER the suite (so the exporter has flushed). Matches a record to its trace by the
+    `run:<scenario>` name within the experiment's tag, polling up to `wait_s` for late flushes —
+    LangSmith assigns its own run-id UUIDs (NOT derived from the SDK trace_id), so name+tag is
+    the reliable join. Returns the number of runs synced. Idempotent-ish: feedback is additive."""
     cl = client if client is not None else _ls_client()
     from harness_core.langsmith_pull import push_feedback
 
-    synced = 0
-    needs_match: list[RunRecord] = []
-    for r in result.records:
-        tid = getattr(r, "trace_id", "")
-        if tid:
-            push_feedback(
-                tid, key="pass", score=1.0 if r.passed else 0.0, comment=r.detail[:200], client=cl
-            )
-            attach_economics(tid, r, client=cl)
-            synced += 1
-        else:
-            needs_match.append(r)
-    if not needs_match:
-        return synced
-
     proj = project or os.environ.get("LANGSMITH_PROJECT")
-    expected: dict[str, RunRecord] = {f"run:{r.scenario}": r for r in needs_match}
+    expected: dict[str, RunRecord] = {f"run:{r.scenario}": r for r in result.records}
     found: dict[str, str] = {}
     deadline = time.monotonic() + wait_s
     while True:
@@ -156,7 +141,7 @@ def sync_to_langsmith(
             client=cl,
         )
         attach_economics(run_id, rec, client=cl)
-    return synced + len(found)
+    return len(found)
 
 
 def run_suite_traced(

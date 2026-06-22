@@ -157,60 +157,6 @@ def test_sync_to_langsmith_pushes_verdict_and_economics(tmp_path: Path) -> None:
     assert ("wall_clock_s", 2.5) in alpha
 
 
-def test_sync_uses_trace_id_fast_path_without_name_matching(tmp_path: Path) -> None:
-    """When records carry trace_id (== LangSmith run id), sync pushes DIRECTLY to it — no
-    list_runs poll, no name-matching."""
-    from types import SimpleNamespace
-
-    from harness_core.experiment_runner import SuiteResult
-    from harness_core.langsmith_export import sync_to_langsmith
-
-    recs = [
-        RunRecord(
-            manifest="m",
-            scenario="s1",
-            floor_enabled=True,
-            outcome=TrialOutcome.PASS,
-            session_path="",
-            detail="ok",
-            trace_id="trace-aaa",
-            cost_usd=0.01,
-        ),
-        RunRecord(
-            manifest="m",
-            scenario="s2",
-            floor_enabled=True,
-            outcome=TrialOutcome.FAIL,
-            session_path="",
-            detail="no",
-            trace_id="trace-bbb",
-        ),
-    ]
-    res = SuiteResult(experiment_id="e", session_root=tmp_path, records=recs, cells={})
-
-    class _C:
-        def __init__(self) -> None:
-            self.fb: list[tuple[str, str, float]] = []
-            self.list_runs_calls = 0
-
-        def list_runs(self, **kw: object) -> list[SimpleNamespace]:
-            self.list_runs_calls += 1
-            return []
-
-        def create_feedback(
-            self, run_id: str, *, key: str = "", score: float = 0.0, **kw: object
-        ) -> None:
-            self.fb.append((run_id, key, score))
-
-    c = _C()
-    n = sync_to_langsmith(res, project="p", client=c, wait_s=0)
-    assert n == 2
-    assert c.list_runs_calls == 0  # FAST PATH: never polled
-    assert ("trace-aaa", "pass", 1.0) in c.fb  # pushed directly by trace_id
-    assert ("trace-bbb", "pass", 0.0) in c.fb
-    assert ("trace-aaa", "cost_usd", 0.01) in c.fb  # economics by trace_id too
-
-
 def test_run_suite_uses_given_experiment_id_and_per_scenario_judge(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
