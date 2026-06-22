@@ -22,6 +22,9 @@ jobs:
       - name: Lint
         run: uv run ruff check src/harness_core
 
+      - name: Type check
+        run: uv run ty check src/harness_core
+
       - name: Test
         run: uv run pytest -q
 

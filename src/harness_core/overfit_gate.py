@@ -91,9 +91,7 @@ def _is_exempt(path: Path) -> bool:
 def _alt(tokens: set[str], flags: int = 0) -> re.Pattern[str] | None:
     if not tokens:
         return None
-    body = "|".join(  # ty: ignore[no-matching-overload]  -- map() yields str, join accepts it
-        sorted(map(re.escape, tokens), key=len, reverse=True)
-    )
+    body = "|".join(sorted(map(re.escape, tokens), key=len, reverse=True))
     return re.compile(rf"\b(?:{body})\b", flags)
 
 

@@ -770,8 +770,9 @@ async def run_agent(
     try:
         _trace.finish(reset_current=True)
         for _sp in tracing.drain(_trace_id):
-            state._say(StepKind.SPAN, **_sp)
-            _drained_spans.append(cast("JSONObject", dict(_sp)))
+            _rec = cast("JSONObject", dict(_sp))
+            state._say(StepKind.SPAN, **_rec)
+            _drained_spans.append(_rec)
     except Exception:  # noqa: BLE001 -- trace capture is observational, never load-bearing
         pass
     usage = _usage_fields(result, model_name)

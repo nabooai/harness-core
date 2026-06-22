@@ -11,10 +11,23 @@ objects leak out."""
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, field
+from datetime import datetime
+from typing import Protocol, cast, runtime_checkable
 
 from harness_core.types import JSONObject
+
+
+@runtime_checkable
+class LangSmithClient(Protocol):
+    """The slice of the LangSmith `Client` this module uses (so the calls type-check without a
+    hard `langsmith` dependency). The real `langsmith.Client` conforms structurally."""
+
+    def read_run(self, run_id: str) -> object: ...
+    def list_runs(self, **kwargs: object) -> Iterable[object]: ...
+    def create_feedback(self, run_id: str, **kwargs: object) -> object: ...
+    def update_run(self, run_id: str, **kwargs: object) -> object: ...
 
 
 @dataclass
@@ -55,27 +68,24 @@ def _get(obj: object, name: str, default: object = None) -> object:
 def _model_of(extra: object) -> str:
     """The model name off a LangSmith run's `extra` (metadata.ls_model_name / invocation
     params), or '' for a non-LLM run."""
-    e = extra if isinstance(extra, dict) else {}
-    md = e.get("metadata") if isinstance(e.get("metadata"), dict) else {}
+    e = _as_obj(extra)
+    md = _as_obj(e.get("metadata"))
     for k in ("ls_model_name", "model", "model_name"):
         v = md.get(k)
         if v:
             return str(v)
-    inv = e.get("invocation_params") if isinstance(e.get("invocation_params"), dict) else {}
-    if inv.get("model"):
-        return str(inv["model"])
-    return ""
+    model = _as_obj(e.get("invocation_params")).get("model")
+    return str(model) if model else ""
 
 
 def _latency_ms(start: object, end: object) -> float | None:
-    try:
-        return round((end - start).total_seconds() * 1000, 1)  # type: ignore[operator]
-    except Exception:  # noqa: BLE001 — missing/odd timestamps just yield no latency
-        return None
+    if isinstance(start, datetime) and isinstance(end, datetime):
+        return round((end - start).total_seconds() * 1000, 1)
+    return None
 
 
 def _as_obj(v: object) -> JSONObject:
-    return v if isinstance(v, dict) else {}
+    return cast("JSONObject", v) if isinstance(v, dict) else {}
 
 
 def _to_int(v: object) -> int:
@@ -105,15 +115,15 @@ def _to_pulled(run: object) -> PulledRun:
     )
 
 
-def _client() -> object:
+def _client() -> LangSmithClient:
     """The LangSmith client (lazy — needs the `langsmith` extra)."""
     try:
-        from langsmith import Client
+        from langsmith import Client  # ty: ignore[unresolved-import] — optional `langsmith` extra
     except ModuleNotFoundError as exc:
         raise RuntimeError(
             "pulling traces needs the LangSmith SDK — install `harness-core[langsmith]`"
         ) from exc
-    return Client()
+    return cast("LangSmithClient", Client())
 
 
 def _build_tree(runs: list[object], root_id: str) -> PulledRun:
@@ -137,13 +147,13 @@ def _build_tree(runs: list[object], root_id: str) -> PulledRun:
     return nodes.get(root_id) or root or next(iter(nodes.values()))
 
 
-def pull(run_id: str, *, client: object | None = None) -> PulledRun:
+def pull(run_id: str, *, client: LangSmithClient | None = None) -> PulledRun:
     """Pull a full trace (the trace root + every descendant) given any run id within it.
     `client` is injectable for tests; omitted → the LangSmith SDK client."""
     client = client or _client()
-    root = client.read_run(run_id)  # type: ignore[attr-defined]
+    root = client.read_run(run_id)
     trace_id = str(_get(root, "trace_id", run_id) or run_id)
-    runs = list(client.list_runs(trace_id=trace_id))  # type: ignore[attr-defined]
+    runs = list(client.list_runs(trace_id=trace_id))
     if not runs:
         runs = [root]
     return _build_tree(runs, str(_get(root, "id", run_id)))
@@ -156,30 +166,31 @@ def push_feedback(
     score: float | None = None,
     value: object | None = None,
     comment: str = "",
-    client: object | None = None,
+    client: LangSmithClient | None = None,
 ) -> None:
     """Attach a verdict/score to a trace as LangSmith feedback — the fix for the audit's
     VERDICT gap. Call this after a harness run with its judge verdict (`score=1.0|0.0`,
     `comment=reason`) so the trace carries the signal the improvement loop learns from.
     `client` is injectable for tests."""
     client = client or _client()
-    client.create_feedback(  # type: ignore[attr-defined]
-        run_id, key=key, score=score, value=value, comment=comment
-    )
+    client.create_feedback(run_id, key=key, score=score, value=value, comment=comment)
 
 
-def attach_metadata(run_id: str, metadata: JSONObject, *, client: object | None = None) -> None:
+def attach_metadata(
+    run_id: str, metadata: JSONObject, *, client: LangSmithClient | None = None
+) -> None:
     """Merge `metadata` into a trace's run metadata (visible in LangSmith's Metadata panel).
     Reads the run first and merges, so existing keys (ls_*) survive. Use this to attach the
     harness's full economics (cost / cached / reasoning / wall-clock) that LangSmith doesn't
     compute for an unpriced model — e.g. `attach_metadata(id, {"economics": econ})`."""
     client = client or _client()
-    run = client.read_run(run_id)  # type: ignore[attr-defined]
-    extra = dict(_as_obj(_get(run, "extra")))
-    md = dict(extra.get("metadata") if isinstance(extra.get("metadata"), dict) else {})
+    run = client.read_run(run_id)
+    extra: JSONObject = dict(_as_obj(_get(run, "extra")))
+    existing = extra.get("metadata")
+    md: JSONObject = dict(existing) if isinstance(existing, dict) else {}
     md.update(metadata)
     extra["metadata"] = md
-    client.update_run(run_id, extra=extra)  # type: ignore[attr-defined]
+    client.update_run(run_id, extra=extra)
 
 
 def pull_project(
@@ -188,7 +199,7 @@ def pull_project(
     limit: int = 20,
     experiment_id: str | None = None,
     filter: str | None = None,  # noqa: A002 — LangSmith's own param name
-    client: object | None = None,
+    client: LangSmithClient | None = None,
 ) -> list[PulledRun]:
     """Pull the most recent root traces of a project, each as a full tree (newest first).
     `experiment_id` filters to one experiment (the `experiment:<id>` tag stamped by
@@ -198,5 +209,5 @@ def pull_project(
     kwargs: dict[str, object] = {"project_name": project, "is_root": True, "limit": limit}
     if flt:
         kwargs["filter"] = flt
-    roots = list(client.list_runs(**kwargs))  # type: ignore[attr-defined]
+    roots = list(client.list_runs(**kwargs))
     return [pull(str(_get(r, "id", "")), client=client) for r in roots]

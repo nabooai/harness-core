@@ -21,6 +21,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
 
     from harness_core.experiment_runner import SuiteResult
+    from harness_core.langsmith_pull import LangSmithClient
     from harness_core.record import RunRecord
     from harness_core.runner import JudgeFn
     from harness_core.scenario import Scenario
@@ -28,7 +29,9 @@ if TYPE_CHECKING:
     from harness_core.types import ModelArg
 
 
-def attach_economics(run_id: str, record: RunRecord, *, client: object | None = None) -> None:
+def attach_economics(
+    run_id: str, record: RunRecord, *, client: LangSmithClient | None = None
+) -> None:
     """Attach a harness run's FULL economics to its LangSmith trace as numeric FEEDBACK — the
     price / cached / reasoning tokens / wall-clock LangSmith doesn't compute for an unpriced
     model (it natively shows only prompt/completion tokens + latency). Each becomes a sortable
@@ -45,10 +48,10 @@ def attach_economics(run_id: str, record: RunRecord, *, client: object | None = 
         "llm_requests": record.llm_requests,
     }
     for key, val in metrics.items():
-        cl.create_feedback(run_id, key=key, score=float(val or 0))  # type: ignore[attr-defined]
+        cl.create_feedback(run_id, key=key, score=float(val or 0))
 
 
-def _ls_client() -> object:
+def _ls_client() -> LangSmithClient:
     from harness_core.langsmith_pull import _client
 
     return _client()
@@ -76,7 +79,7 @@ def enable_langsmith(
     eid = experiment_id or new_experiment_id()
     try:
         from agents import add_trace_processor
-        from langsmith.wrappers import OpenAIAgentsTracingProcessor
+        from langsmith.wrappers import OpenAIAgentsTracingProcessor  # ty: ignore[unresolved-import]
     except ModuleNotFoundError as exc:
         raise RuntimeError(
             "LangSmith export needs the agents tracing integration — "
@@ -97,7 +100,7 @@ def sync_to_langsmith(
     result: SuiteResult,
     *,
     project: str | None = None,
-    client: object | None = None,
+    client: LangSmithClient | None = None,
     wait_s: float = 20.0,
 ) -> int:
     """Push each suite run's VERDICT (feedback `pass` 1.0/0.0) + ECONOMICS to its LangSmith
@@ -111,7 +114,7 @@ def sync_to_langsmith(
     deadline = time.monotonic() + wait_s
     while True:
         roots = list(
-            cl.list_runs(  # type: ignore[attr-defined]
+            cl.list_runs(
                 project_name=proj,
                 is_root=True,
                 filter=f'has(tags, "experiment:{result.experiment_id}")',

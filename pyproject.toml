@@ -51,10 +51,16 @@ dev = [
     "pytest>=8.0.0",
     "pytest-asyncio>=1.3.0",
     "ruff>=0.6.0",
+    "ty>=0.0.1",
     "fastapi>=0.136.0",
     "uvicorn>=0.45.0",
     "httpx>=0.28.0",
 ]
+
+[tool.ty.src]
+# Tests aren't a typed API surface (same rationale as the ruff ANN test-exemption) — the
+# library is what must type-check. SDK TypedDict subscripts in tests produce inherent noise.
+exclude = ["**/test_*.py"]
 
 [project.scripts]
 # `harness-core ...` -> the package __main__ (server | analyze | list).
