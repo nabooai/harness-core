@@ -118,10 +118,17 @@ def _install_httpx_hooks(provider: TracerProvider) -> None:
         _name_http_span(span, getattr(info, "method", "?"), getattr(info, "url", "?"))
 
     def _resp(span: Span, info: object, response: object) -> None:
+        # Stamp the request line + status as both individual attrs (generic backends) AND a
+        # `metadata` blob (LangSmith) — else the httpx span is an opaque "POST" with no detail.
         try:
+            method = str(getattr(info, "method", "?"))
+            url = str(getattr(info, "url", "?"))
+            meta: dict[str, object] = {"http.method": method, "http.url": url}
             status = getattr(response, "status_code", None)
-            if status is not None and hasattr(span, "set_attribute"):
+            if status is not None:
                 span.set_attribute("http.status_code", int(status))
+                meta["http.status_code"] = int(status)
+            span.set_attribute("metadata", json.dumps(meta, default=str, ensure_ascii=False))
         except Exception:  # noqa: BLE001
             pass
 
@@ -238,9 +245,8 @@ def mirror_data_to_otel(data: Mapping[str, object]) -> None:
         span = otel_trace.get_current_span()
         if not span.is_recording():
             return
-        for key, value in data.items():
-            if value is None:
-                continue
+        present = {k: v for k, v in data.items() if v is not None}
+        for key, value in present.items():
             attr: str | bool | int | float
             if isinstance(value, str | bool | int | float):
                 attr = value
@@ -248,6 +254,12 @@ def mirror_data_to_otel(data: Mapping[str, object]) -> None:
                 attr = json.dumps(value, default=str, ensure_ascii=False)
             if isinstance(attr, str) and len(attr) > _MAX_ATTR_CHARS:
                 attr = attr[:_MAX_ATTR_CHARS] + "…"
+            # Individual attribute: read by generic OTEL backends (Jaeger/Tempo/...).
             span.set_attribute(key, attr)
+        # The OpenInference `metadata` convention (a JSON blob) is what LangSmith ingests into the
+        # run's metadata panel — generic span attributes above are dropped by its OTLP mapping, so
+        # WITHOUT this the data is invisible in LangSmith. Emit both: cover every backend.
+        blob = json.dumps(present, default=str, ensure_ascii=False)
+        span.set_attribute("metadata", blob[:_MAX_ATTR_CHARS])
     except Exception:  # noqa: BLE001 — tracing must never break a tool call
         pass
