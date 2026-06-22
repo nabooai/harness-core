@@ -97,6 +97,47 @@ LangSmith ingests arbitrary OTEL spans and reads `langsmith.span.kind`
 (the harness uses these for its phase timings) is exported by the OpenInference instrumentor in
 the section above, so it lands in LangSmith with its `data` payload intact.
 
+## Run a scenario suite under one experiment_id
+
+To measure/improve you run the WHOLE suite and compare. `run_suite` runs every scenario, groups
+the runs under `session_root/<experiment_id>/` (+ an `experiment.json` ledger), and — with
+`enable_langsmith` on — stamps every trace with `metadata.experiment_id` + a `experiment:<id>`
+tag so the suite is one filterable group in LangSmith:
+
+```python
+from harness_core.langsmith_export import enable_langsmith   # langsmith[openai-agents]
+from harness_core.experiment_runner import run_suite, new_experiment_id
+
+eid = new_experiment_id("explore")
+enable_langsmith(experiment_id=eid, project="harness-core")   # tag every trace with eid
+
+res = run_suite(
+    scenarios,            # list[Scenario] — each carries its World (e.g. GrafWorld.canonical)
+    target,               # the HarnessTarget (e.g. ExploreSchemaTarget)
+    judge=target.judge(judge_model),
+    session_root="runs",
+    experiment_id=eid,
+    model="gemini/gemini-3-flash-preview",
+    judge_factory=lambda scn: ...,   # optional: a per-scenario judge
+)
+print(res.render())       # === experiment explore-… — 3/3 pass ===
+```
+
+Then pull the whole experiment back and audit it:
+
+```bash
+harness-core pull --project harness-core --experiment explore-20260622T073232-cf23f5
+```
+```python
+from harness_core.langsmith_pull import pull_project, push_feedback
+for trace in pull_project("harness-core", experiment_id=eid):
+    ...                   # audit, and push_feedback(trace.id, score=…) to attach the verdict
+```
+
+Proven end-to-end on the schema explorer: 3 scenarios → one experiment_id → 6 tagged traces
+(scenario roots + nested judge/sub-agent traces) → pulled by experiment_id → after
+`push_feedback`, each audits `improvement-ready 8/8`.
+
 ## Pulling & auditing traces (the improvement loop)
 
 A trace is only useful if it carries what you reason over to IMPROVE the agent. harness-core

@@ -39,6 +39,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     p_pull.add_argument("run_id", nargs="?", help="a run/trace id (omit with --project)")
     p_pull.add_argument("--project", default=None, help="audit recent traces of this project")
+    p_pull.add_argument(
+        "--experiment", default=None, help="with --project: filter to one experiment_id"
+    )
     p_pull.add_argument("--limit", type=int, default=10, help="with --project: how many traces")
     p_pull.add_argument("--json", action="store_true", help="machine-readable output")
 
@@ -74,7 +77,7 @@ def _pull(args: argparse.Namespace) -> int:
     from harness_core.langsmith_pull import pull, pull_project
 
     if args.project:
-        roots = pull_project(args.project, limit=args.limit)
+        roots = pull_project(args.project, limit=args.limit, experiment_id=args.experiment)
     elif args.run_id:
         roots = [pull(args.run_id)]
     else:

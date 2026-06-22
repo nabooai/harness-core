@@ -168,10 +168,21 @@ def push_feedback(
     )
 
 
-def pull_project(project: str, *, limit: int = 20, client: object | None = None) -> list[PulledRun]:
-    """Pull the most recent root traces of a project, each as a full tree (newest first)."""
+def pull_project(
+    project: str,
+    *,
+    limit: int = 20,
+    experiment_id: str | None = None,
+    filter: str | None = None,  # noqa: A002 — LangSmith's own param name
+    client: object | None = None,
+) -> list[PulledRun]:
+    """Pull the most recent root traces of a project, each as a full tree (newest first).
+    `experiment_id` filters to one experiment (the `experiment:<id>` tag stamped by
+    `langsmith_export.enable_langsmith`); `filter` passes a raw LangSmith query through."""
     client = client or _client()
-    roots = list(
-        client.list_runs(project_name=project, is_root=True, limit=limit)  # type: ignore[attr-defined]
-    )
+    flt = filter or (f'has(tags, "experiment:{experiment_id}")' if experiment_id else None)
+    kwargs: dict[str, object] = {"project_name": project, "is_root": True, "limit": limit}
+    if flt:
+        kwargs["filter"] = flt
+    roots = list(client.list_runs(**kwargs))  # type: ignore[attr-defined]
     return [pull(str(_get(r, "id", "")), client=client) for r in roots]

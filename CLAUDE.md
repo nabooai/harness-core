@@ -39,6 +39,8 @@ src/harness_core/
   refusal_audit.py honest-vs-lazy refusal audit
   types.py        the data contracts (JSON, QueryCall, ToolCall, Excerpt, Verdict, TrialOutcome)
   analyze_trace.py / analyze_session.py   CLI trace readers (local run dirs)
+  experiment_runner.py  run_suite — run a scenario suite under one experiment_id (+ ledger)
+  langsmith_export.py   enable_langsmith — export agent runs to LangSmith tagged with experiment_id
   langsmith_pull.py  pull a full trace back out of LangSmith (PulledRun tree) + push_feedback
   trace_audit.py  audit a pulled trace for improvement-readiness (required signals + fixes)
   results.py      graf-free run-dir reader (the dashboard's data layer)
