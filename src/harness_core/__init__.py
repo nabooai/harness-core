@@ -16,7 +16,7 @@ internal detail and may change without a version bump.
 
 from __future__ import annotations
 
-__version__ = "0.2.1"
+__version__ = "0.3.0"
 
 from harness_core.compare import ExperimentDiff, compare_experiments, control_gap
 from harness_core.experiment import Experiment

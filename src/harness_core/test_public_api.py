@@ -53,6 +53,7 @@ def test_langsmith_and_server_are_not_eagerly_imported() -> None:
         "import harness_core, sys; "
         "assert 'harness_core.langsmith_export' not in sys.modules; "
         "assert 'harness_core.server' not in sys.modules; "
+        "assert 'harness_core.otel' not in sys.modules; "
         "print('clean')"
     )
     out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)

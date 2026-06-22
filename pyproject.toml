@@ -43,6 +43,16 @@ langsmith = [
     "opentelemetry-sdk>=1.25.0",
     "opentelemetry-exporter-otlp-proto-http>=1.25.0",
 ]
+# Full-stack OTEL (harness_core.otel): instrument the Agents SDK + litellm + httpx and export
+# real OTLP spans (the underlying LLM-HTTP + downstream API calls, not just agent steps) to any
+# OTLP backend. Gated on HARNESS_OTEL. Optional — install only for full-fidelity OTEL tracing.
+otel = [
+    "opentelemetry-sdk>=1.25.0",
+    "opentelemetry-exporter-otlp-proto-http>=1.25.0",
+    "openinference-instrumentation-openai-agents>=0.1.0",
+    "openinference-instrumentation-litellm>=0.1.0",
+    "opentelemetry-instrumentation-httpx>=0.46b0",
+]
 
 # Dev tooling lives in a uv dependency-group (installed by default on `uv sync`, but NEVER
 # shipped in the wheel). Includes the server deps + httpx so the WHOLE test suite runs on a
@@ -56,6 +66,12 @@ dev = [
     "fastapi>=0.136.0",
     "uvicorn>=0.45.0",
     "httpx>=0.28.0",
+    # otel extra, so the harness_core.otel tests run on a plain `uv sync`.
+    "opentelemetry-sdk>=1.25.0",
+    "opentelemetry-exporter-otlp-proto-http>=1.25.0",
+    "openinference-instrumentation-openai-agents>=0.1.0",
+    "openinference-instrumentation-litellm>=0.1.0",
+    "opentelemetry-instrumentation-httpx>=0.46b0",
 ]
 
 [tool.ty.src]
