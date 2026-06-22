@@ -95,15 +95,21 @@ def _targets() -> list[tuple[str, dict[str, str]]]:
     return targets
 
 
+def _as_method(method: object) -> str:
+    """httpx hands the method as BYTES (``b'GET'``); decode so the span shows ``GET``."""
+    return method.decode() if isinstance(method, bytes) else str(method)
+
+
 def _name_http_span(span: Span, method: object, url: object) -> None:
     """Rename a bare ``GET``/``POST`` httpx span to ``<METHOD> <host><path>`` and stamp clean
     attributes, so the request is identifiable in the trace instead of an opaque ``POST``."""
     try:
+        m = _as_method(method)
         u = str(url)
         host_path = u.split("?", 1)[0]
         if hasattr(span, "update_name"):
-            span.update_name(f"{method} {host_path}")
-        span.set_attribute("http.method", str(method))
+            span.update_name(f"{m} {host_path}")
+        span.set_attribute("http.method", m)
         span.set_attribute("http.url", u)
     except Exception:  # noqa: BLE001
         pass
@@ -121,7 +127,7 @@ def _install_httpx_hooks(provider: TracerProvider) -> None:
         # Stamp the request line + status as both individual attrs (generic backends) AND a
         # `metadata` blob (LangSmith) — else the httpx span is an opaque "POST" with no detail.
         try:
-            method = str(getattr(info, "method", "?"))
+            method = _as_method(getattr(info, "method", "?"))
             url = str(getattr(info, "url", "?"))
             meta: dict[str, object] = {"http.method": method, "http.url": url}
             status = getattr(response, "status_code", None)
@@ -132,12 +138,20 @@ def _install_httpx_hooks(provider: TracerProvider) -> None:
         except Exception:  # noqa: BLE001
             pass
 
+    # Async clients (litellm + the connector engine use httpx.AsyncClient) call the ASYNC hooks,
+    # which the instrumentor AWAITS — so they must be coroutines, not the sync callables above.
+    async def _areq(span: Span, info: object) -> None:
+        _req(span, info)
+
+    async def _aresp(span: Span, info: object, response: object) -> None:
+        _resp(span, info, response)
+
     HTTPXClientInstrumentor().instrument(
         tracer_provider=provider,
         request_hook=_req,
         response_hook=_resp,
-        async_request_hook=_req,
-        async_response_hook=_resp,
+        async_request_hook=_areq,
+        async_response_hook=_aresp,
     )
 
 
