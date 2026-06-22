@@ -382,6 +382,16 @@ def _judge_finished(
             f"judge unavailable: {type(exc).__name__}: {exc}"[:160] + advisory,
             "",
         )
+    # A MECHANICAL judge failure (unparseable/garbage JSON -> the judge MACHINERY failed, not
+    # the model) is INFRA, not a model FAIL -- same class as the exception above. Without this,
+    # a structured-output hiccup silently deflates the pass-rate the loop optimizes. The typed
+    # `mechanical` marker is set by judge._parse; we never parse the reason string.
+    if isinstance(verdict.evidence, dict) and verdict.evidence.get("mechanical"):
+        return (
+            TrialOutcome.INFRA_FAILURE,
+            f"judge returned no usable verdict: {verdict.reason}"[:160] + advisory,
+            "",
+        )
     outcome = TrialOutcome.PASS if verdict.passed else TrialOutcome.FAIL
     # A gate/judge DISAGREEMENT is the one signal that must never be silent: the
     # advisory demotion was justified by "the LLM independently enforces the same

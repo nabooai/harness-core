@@ -62,3 +62,7 @@ class Scenario:
     judge: JudgeSpec
     model: ModelArg = None
     reasoning: str = ""
+    # PROVENANCE: where this scenario came from (e.g. the LangSmith run id it was synthesized
+    # from — see scenario_synth). "" = hand-authored. Lets the held-out/regression set record
+    # whether it grew from REAL production failures vs was tuned by hand (the overfit tell).
+    provenance: str = ""

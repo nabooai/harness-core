@@ -188,6 +188,19 @@ def render_diff(diff: ExperimentDiff) -> str:
     return "\n".join(lines)
 
 
+def control_gap(under_test: list, control: list) -> ExperimentDiff:
+    """The CONTROL-ARM comparison: diff the agent-under-test against a first-principles control
+    agent (a baseline/fresh-context/previous-version target) run over the SAME scenarios. A
+    `regressed` row = under-test fails where control passes (a harness bug or model floor); an
+    `improved` row = under-test passes only WITH its scaffolding (watch for overfit if it's a
+    named scenario). Inputs are two `RunRecord` lists; aggregated + diffed by (scenario, floor)."""
+    from harness_core.record import aggregate
+
+    base = {"experiment_id": "control", "cells": aggregate(control)}
+    cand = {"experiment_id": "under_test", "cells": aggregate(under_test)}
+    return compare_experiments(base, cand)
+
+
 def baseline_signal(cells: _CellMap, *, bar: float = 0.6) -> bool:
     """True iff every cell clears the ship bar (wilson_lb ≥ bar). A convenience for gating a
     single experiment without a baseline."""

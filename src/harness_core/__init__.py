@@ -18,12 +18,14 @@ from __future__ import annotations
 
 __version__ = "0.1.0"
 
-from harness_core.compare import ExperimentDiff, compare_experiments
+from harness_core.compare import ExperimentDiff, compare_experiments, control_gap
 from harness_core.experiment import Experiment
 from harness_core.experiment_audit import ExperimentAudit, audit_experiment
 from harness_core.experiment_runner import SuiteResult, SuiteSpec, new_experiment_id, run_suite
 from harness_core.judge import GENERIC_RUBRIC, LLMJudge, Rubric
+from harness_core.judge_calibration import CalibrationReport, GoldenCase, run_calibration
 from harness_core.metrics import Economics, RunMetrics
+from harness_core.overfit_summary import OverfitSummary, overfit_summary
 from harness_core.record import (
     Manifest,
     RunRecord,
@@ -34,6 +36,7 @@ from harness_core.record import (
 )
 from harness_core.runner import run, run_experiment
 from harness_core.scenario import JudgeSpec, Scenario
+from harness_core.scenario_synth import scenario_from_trace
 from harness_core.target import (
     BaseHarnessTarget,
     HarnessState,
@@ -58,11 +61,13 @@ __all__ = [
     "GENERIC_RUBRIC",
     "JSON",
     "BaseHarnessTarget",
+    "CalibrationReport",
     "Economics",
     "Excerpt",
     "Experiment",
     "ExperimentAudit",
     "ExperimentDiff",
+    "GoldenCase",
     "HarnessState",
     "HarnessTarget",
     "JSONObject",
@@ -71,6 +76,7 @@ __all__ = [
     "Manifest",
     "ModelArg",
     "NullWorld",
+    "OverfitSummary",
     "QueryCall",
     "RunMetrics",
     "RunRecord",
@@ -82,8 +88,6 @@ __all__ = [
     "SuiteResult",
     "SuiteSpec",
     "ToolAgentTarget",
-    "audit_experiment",
-    "compare_experiments",
     "ToolCall",
     "TrialOutcome",
     "Verdict",
@@ -91,10 +95,16 @@ __all__ = [
     "WorldHandle",
     "__version__",
     "aggregate",
+    "audit_experiment",
+    "compare_experiments",
+    "control_gap",
     "gap_thermometer",
     "new_experiment_id",
+    "overfit_summary",
     "run",
+    "run_calibration",
     "run_experiment",
     "run_suite",
+    "scenario_from_trace",
     "wilson_lower_bound",
 ]
