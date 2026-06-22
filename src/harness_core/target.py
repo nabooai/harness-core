@@ -281,3 +281,70 @@ def default_verdict_unknown() -> Verdict:  # noqa: F821 — TYPE_CHECKING import
     from harness_core.types import Verdict
 
     return Verdict(passed=False, reason="unjudged")
+
+
+class SimpleState:
+    """A ready-made `HarnessState` for a CONFIG-LESS tool-using agent (no graf, no config).
+
+    A new target's `new_state` can just `return SimpleState(vault_names=..., log=log)` instead
+    of hand-rolling the protocol fields. The loop touches only these members (pinned by
+    `test_loop_touches_only_generic_state`)."""
+
+    def __init__(
+        self,
+        *,
+        vault_names: Collection[str] = (),
+        log: SessionLog | None = None,
+        max_turns: int = 0,
+    ) -> None:
+        self.config_path: Path | None = None  # config-less
+        self.vault_names: list[str] = list(vault_names)
+        self.log: SessionLog | None = log
+        self.query_calls: list[QueryCall] = []
+        self.sample_rows: list[JSONObject] = []
+        self.turn: int = 0
+        self.max_turns: int = max_turns
+        self.last_model_item: str = ""
+        self.called_tool_names: set[str] = set()
+
+    def _say(self, kind: str, **data: JSON) -> None:
+        if self.log is not None:
+            self.log.append(kind, **data)
+
+
+class ToolAgentTarget(BaseHarnessTarget):
+    """The fast path for a BARE openai-agents tool-using agent (no graf, no config). Implement
+    only `name`, `build_agent`, `judge`, and `system_prompt_text` — `new_state` (a `SimpleState`)
+    and `excerpt` (the judge sees the agent's tool calls + the full transcript, reconstructed
+    from the SDK result) are provided. See `examples/weather_agent/`."""
+
+    def new_state(
+        self,
+        *,
+        config_path: Path | None,
+        vault_names: list[str],
+        log: SessionLog | None,
+        **knobs: JSON,
+    ) -> SimpleState:
+        return SimpleState(vault_names=vault_names, log=log)
+
+    def excerpt(
+        self,
+        experiment: Experiment,
+        state: HarnessState,
+        *,
+        final_output: str,
+        run_date: str,
+        result: SDKRunResult | None = None,
+    ) -> Excerpt:
+        from harness_core.loop import tool_calls_from_result, transcript_from_result
+        from harness_core.types import Excerpt as _Excerpt
+
+        return _Excerpt(
+            brief=experiment.brief,
+            final_output=final_output,
+            vault_names=list(state.vault_names),
+            run_date=run_date,
+            tool_calls=tool_calls_from_result(result) if result is not None else [],
+            transcript=transcript_from_result(result) if result is not None else [],
+        )

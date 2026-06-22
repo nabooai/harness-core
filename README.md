@@ -40,11 +40,38 @@ pip install -e '.[server]'  # + the FastAPI/uvicorn server
 pip install -e '.[dev]'     # + pytest/ruff for development
 ```
 
-## Quickstart: wire a target
+## Quickstart
 
-Subclass `BaseHarnessTarget` and implement the five required members; see
-[`ADDING_A_TARGET.md`](ADDING_A_TARGET.md) for the authoritative contract and
-[`docs/INTERNALS.md`](docs/INTERNALS.md) for the deep dive.
+The fastest path for a **bare openai-agents agent** (no graf, no config): subclass
+`ToolAgentTarget` and implement just `build_agent` / `judge` / `system_prompt_text` — it
+supplies the state + judge-grounding. A complete, runnable example (a `get_weather` agent →
+judged experiment suite → LangSmith) is in [`examples/weather_agent/`](examples/weather_agent/):
+
+```bash
+cd examples/weather_agent
+export OPENAI_API_KEY=sk-...
+python weather.py                 # run + judge the suite → 3/3 pass
+python weather.py --trace         # also export to LangSmith (needs LANGSMITH_API_KEY)
+```
+
+```python
+from harness_core.target import ToolAgentTarget
+from harness_core.judge import LLMJudge, Rubric
+
+class WeatherTarget(ToolAgentTarget):
+    name = "weather"
+    def build_agent(self, model=None, reasoning=""):
+        return Agent(name="weather", model=model or "gpt-4o-mini",
+                     instructions=self.system_prompt_text(), tools=[get_weather])
+    def judge(self, model):
+        return LLMJudge(model=model, rubric=RUBRIC)
+    def system_prompt_text(self):
+        return "You are a weather assistant. Use the get_weather tool; never invent weather."
+```
+
+For a target that mutates a per-run config (graf-style), subclass `BaseHarnessTarget` and
+implement the five required members instead; see [`ADDING_A_TARGET.md`](ADDING_A_TARGET.md) for
+the authoritative contract and [`docs/INTERNALS.md`](docs/INTERNALS.md) for the deep dive.
 
 ```python
 from harness_core.target import BaseHarnessTarget

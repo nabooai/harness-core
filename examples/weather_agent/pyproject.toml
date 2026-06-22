@@ -1,0 +1,14 @@
+[project]
+name = "weather-agent"
+version = "0.1.0"
+description = "A bare openai-agents weather agent, evaluated with harness-core."
+requires-python = ">=3.14"
+dependencies = [
+    # the agent SDK + the eval harness; [langsmith] adds LangSmith export for --trace
+    "openai-agents>=0.17.6",
+    "harness-core[langsmith] @ git+https://github.com/nabooai/harness-core",
+]
+
+# during local dev against a checkout, point harness-core at the sibling source instead:
+# [tool.uv.sources]
+# harness-core = { path = "../..", editable = true }
