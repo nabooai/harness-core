@@ -84,6 +84,50 @@ def test_run_command_gate_fails_when_a_cell_is_below_bar(
     assert rc == 1
 
 
+def test_load_factory_puts_cwd_on_sys_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The console-script entry point doesn't add cwd to sys.path; `_load_factory` does, so a
+    target package in the invoking project imports with NO PYTHONPATH. Regression for the
+    `ModuleNotFoundError: No module named '<target-pkg>'` that forced a `PYTHONPATH=` prefix."""
+    import sys
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(sys, "path", [p for p in sys.path if p != str(tmp_path)])
+    assert str(tmp_path) not in sys.path
+    M._load_factory("harness_core.test_cli:_factory")
+    assert str(tmp_path) in sys.path
+
+
+def test_default_session_root_is_dashboard_discoverable() -> None:
+    """A bare `run` (no --session-root) must land where the reader auto-discovers it:
+    `$HARNESS_RUNS_BASE/<target-package>/runs` — matching `results._roots`' `<base>/*/runs`
+    glob. The old `runs` default had no `<label>/` segment, so it never matched."""
+    import harness_core.results as R
+
+    base = R._base()  # respects HARNESS_RUNS_BASE; defaults to cwd
+    sr = Path(M._default_session_root("explore_schema_agent.suite:suite_spec"))
+    # `<base>/<label>/runs` — i.e. exactly a `<base>/*/runs` discovery root.
+    assert sr.resolve() == (base / "explore_schema_agent" / "runs").resolve()
+    assert sr.name == "runs" and sr.parent.name == "explore_schema_agent"
+
+
+def test_run_without_session_root_writes_to_discoverable_default(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """End-to-end: `run` with no --session-root, HARNESS_RUNS_BASE set, writes run dirs under
+    `<base>/<target-package>/runs` and the dashboard reader (`list_cells`) then finds them."""
+    _fake_runner(monkeypatch, passes={"alpha", "beta"})
+    monkeypatch.setenv("HARNESS_RUNS_BASE", str(tmp_path))
+    monkeypatch.delenv("HARNESS_RUNS_ROOTS", raising=False)
+    rc = M.main(["run", "--target", "harness_core.test_cli:_factory"])
+    assert rc == 0
+    # Run dirs land under `<base>/<label>/runs/<exp-id>/<scenario>` — i.e. inside the
+    # `<base>/*/runs` tree the reader auto-discovers. (The old `runs` default wrote to `./runs`,
+    # outside any `*/runs` glob, so a default run was invisible.)
+    runs_root = tmp_path / "harness_core" / "runs"
+    sessions = {p.parent.name for p in runs_root.rglob("session.jsonl")}
+    assert sessions == {"alpha__floor-1", "beta__floor-1"}
+
+
 def test_compare_command_exit_code(monkeypatch: pytest.MonkeyPatch) -> None:
     import harness_core.results as R
 

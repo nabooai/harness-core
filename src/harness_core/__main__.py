@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from collections.abc import Callable, Sequence
 from typing import TYPE_CHECKING
@@ -57,7 +58,12 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     p_run = sub.add_parser("run", help="run a target's suite; exit non-zero on a regression")
     p_run.add_argument("--target", required=True, help="pkg.module:factory returning a SuiteSpec")
-    p_run.add_argument("--session-root", default="runs", help="where run dirs are written")
+    p_run.add_argument(
+        "--session-root",
+        default=None,
+        help="where run dirs are written (default: $HARNESS_RUNS_BASE/<target-package>/runs, "
+        "the location the dashboard auto-discovers)",
+    )
     p_run.add_argument("--experiment", default=None, help="experiment_id (default: generated)")
     p_run.add_argument("--baseline", default=None, help="experiment_id to gate against")
     p_run.add_argument("--gate", action="store_true", help="exit≠0 if a cell is below the ship bar")
@@ -116,8 +122,26 @@ def _load_factory(spec: str) -> Callable[[], SuiteSpec]:
 
     if ":" not in spec:
         raise SystemExit(f"--target must be 'pkg.module:factory', got {spec!r}")
+    # The console-script entry point (unlike `python -m harness_core` / `python file.py`) does
+    # NOT put the cwd on sys.path, so a target package living in the project the CLI is invoked
+    # from is unimportable — ModuleNotFoundError unless the caller exports PYTHONPATH. Add the
+    # cwd so `--target mypkg.suite:factory` resolves from the project root, no PYTHONPATH crutch.
+    cwd = os.getcwd()
+    if cwd not in sys.path:
+        sys.path.insert(0, cwd)
     mod_name, _, attr = spec.partition(":")
     return getattr(importlib.import_module(mod_name), attr)
+
+
+def _default_session_root(target: str) -> str:
+    """The discoverable default write root for a bare `run`: ``$HARNESS_RUNS_BASE/<label>/runs``,
+    where ``<label>`` is the top-level package of ``--target``. The reader (`results._roots`)
+    auto-discovers ``<base>/*/runs`` trees, so this is exactly where a run must land for the
+    dashboard to find it with NO flags. (The historical cwd-relative ``runs`` default had no
+    ``<label>/`` segment, so it never matched ``*/runs`` and a default run was invisible.)"""
+    base = os.environ.get("HARNESS_RUNS_BASE", ".")
+    label = target.split(":", 1)[0].split(".", 1)[0] or "target"
+    return os.path.join(base, label, "runs")
 
 
 def _run(args: argparse.Namespace) -> int:
@@ -128,6 +152,7 @@ def _run(args: argparse.Namespace) -> int:
     from harness_core.results import load_experiment
 
     spec = _load_factory(args.target)()
+    session_root = args.session_root or _default_session_root(args.target)
     if args.traced:
         from harness_core.langsmith_export import run_suite_traced
 
@@ -135,7 +160,7 @@ def _run(args: argparse.Namespace) -> int:
             spec.scenarios,
             spec.target,
             judge=spec.judge,
-            session_root=args.session_root,
+            session_root=session_root,
             experiment_id=args.experiment,
             project=spec.project,
             model=spec.model,
@@ -149,7 +174,7 @@ def _run(args: argparse.Namespace) -> int:
             spec.scenarios,
             spec.target,
             judge=spec.judge,
-            session_root=args.session_root,
+            session_root=session_root,
             experiment_id=args.experiment,
             model=spec.model,
             model_name=spec.model_name,

@@ -4,6 +4,19 @@ All notable changes to harness-core. Follows [Keep a Changelog](https://keepacha
 and [Semantic Versioning](https://semver.org/). The public API is what's re-exported from
 `harness_core` (see `__all__`); deeper imports are internal and may change without a bump.
 
+## [Unreleased]
+
+### Fixed
+- **`run --target` imports with no `PYTHONPATH`** — the `harness-core` console-script entry
+  point (unlike `python -m harness_core`) never put the cwd on `sys.path`, so a target package
+  in the invoking project died with `ModuleNotFoundError` unless the caller exported
+  `PYTHONPATH`. `_load_factory` now prepends the cwd before importing the target.
+- **A bare `run` lands where the dashboard reads it** — `--session-root` defaulted to the
+  cwd-relative `runs`, but auto-discovery (`results._roots`) only finds `<base>/*/runs` trees,
+  so a default run (`./runs`, no `<label>/` segment) was invisible. The default is now
+  `$HARNESS_RUNS_BASE/<target-package>/runs`, exactly a discovery root — write and read finally
+  agree out of the box. An explicit `--session-root` still wins.
+
 ## [0.2.1] - 2026-06-22
 
 ### Added
